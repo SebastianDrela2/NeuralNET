@@ -22,8 +22,8 @@ public static partial class GraphicsUtils
 
     private static readonly Random _rng = new(RandomSeed);
 
-    public const int Width = 16;
-    public const int Height = 16;
+    public const int Width = 28;
+    public const int Height = 28;
 
     public const int PixelCount = Width * Height;
 
@@ -34,12 +34,17 @@ public static partial class GraphicsUtils
 
     public static readonly char[] DefaultLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToCharArray();
 
-    public static PixelStructRGB[] GetLettersDataSetRGB(string fontName, bool applyTransformation = true)
-    {
-        return GetLettersDataSetRGB(fontName, DefaultLetters, applyTransformation);
-    }
+    public static PixelStructRGB[] GetLettersDataSetRGB(
+        string fontName,
+        bool applyTransformation = true,
+        FontStyle style = FontStyle.Regular)
+        => GetLettersDataSetRGB(fontName, DefaultLetters, applyTransformation, style);
 
-    public static PixelStructRGB[] GetLettersDataSetRGB(string fontName, char[] characters, bool applyTransformation = true)
+    public static PixelStructRGB[] GetLettersDataSetRGB(
+        string fontName,
+        char[] characters,
+        bool applyTransformation = true,
+        FontStyle style = FontStyle.Regular)
     {
         if (!IsSupported)
         {
@@ -47,7 +52,7 @@ public static partial class GraphicsUtils
         }
 
         var result = new PixelStructRGB[characters.Length];
-        using var font = new Font(fontName, FontSize * UpScale, FontStyle.Regular);
+        using var font = new Font(fontName, FontSize * UpScale, style);
 
         for (var i = 0; i < characters.Length; ++i)
         {
@@ -116,16 +121,37 @@ public static partial class GraphicsUtils
             );
         }
 
-        var index = 0;
         var pixels = new PixelStructRGB(classLabel, Size);
 
-        for (int y = 0; y < Height; y++)
+        // Lock bitmap bits for fast memory extraction instead of calling GetPixel
+        BitmapData data = trueBitMap.LockBits(
+            new Rectangle(0, 0, Width, Height),
+            ImageLockMode.ReadOnly,
+            PixelFormat.Format32bppArgb);
+
+        try
         {
-            for (int x = 0; x < Width; x++, ++index)
+            byte[] buffer = new byte[data.Stride * Height];
+            Marshal.Copy(data.Scan0, buffer, 0, buffer.Length);
+
+            int index = 0;
+            for (int y = 0; y < Height; y++)
             {
-                var pixel = trueBitMap.GetPixel(x, y);
-                pixels.Values[index] = (pixel.R, pixel.G, pixel.B);
+                int rowOffset = y * data.Stride;
+                for (int x = 0; x < Width; x++, index++)
+                {
+                    int pixelOffset = rowOffset + (x * 4);
+                    byte b = buffer[pixelOffset];
+                    byte g = buffer[pixelOffset + 1];
+                    byte r = buffer[pixelOffset + 2];
+
+                    pixels.Values[index] = (r, g, b);
+                }
             }
+        }
+        finally
+        {
+            trueBitMap.UnlockBits(data);
         }
 
         return pixels;
@@ -135,7 +161,10 @@ public static partial class GraphicsUtils
 
     #region Original Digit Data Generation (PRESERVED)
 
-    public static PixelStructRGB[] GetDigitsDataSetRGB(string fontName, bool applyTransformation = true)
+    public static PixelStructRGB[] GetDigitsDataSetRGB(
+        string fontName,
+        bool applyTransformation = true,
+        FontStyle style = FontStyle.Regular)
     {
         if (!IsSupported)
         {
@@ -145,7 +174,7 @@ public static partial class GraphicsUtils
         var result = new PixelStructRGB[DigitLimit];
         var c = '0';
 
-        var font = new Font(fontName, FontSize * UpScale, FontStyle.Regular);
+        using var font = new Font(fontName, FontSize * UpScale, style);
 
         for (var i = 0; i < DigitLimit; ++i, ++c)
         {
@@ -169,7 +198,10 @@ public static partial class GraphicsUtils
         return result;
     }
 
-    public static PixelStruct[] GetDigitsDataSet(string fontName, bool applyTransformation = true)
+    public static PixelStruct[] GetDigitsDataSet(
+        string fontName,
+        bool applyTransformation = true,
+        FontStyle style = FontStyle.Regular)
     {
         if (!IsSupported)
         {
@@ -179,7 +211,7 @@ public static partial class GraphicsUtils
         var result = new PixelStruct[DigitLimit];
         var c = '0';
 
-        var font = new Font(fontName, FontSize * UpScale, FontStyle.Regular);
+        using var font = new Font(fontName, FontSize * UpScale, style);
 
         for (var i = 0; i < DigitLimit; ++i, ++c)
         {
@@ -203,14 +235,19 @@ public static partial class GraphicsUtils
         return result;
     }
 
-    public static PixelStruct GenerateCharPixelStruct(char @char, string fontName, Matrix? transformation = null)
+    public static PixelStruct GenerateCharPixelStruct(
+        char @char,
+        string fontName,
+        Matrix? transformation = null,
+        FontStyle style = FontStyle.Regular)
     {
         if (!IsSupported)
         {
             throw new NotSupportedException();
         }
 
-        return GenerateCharPixelStruct(@char, new Font(fontName, FontSize * UpScale, FontStyle.Regular));
+        using var font = new Font(fontName, FontSize * UpScale, style);
+        return GenerateCharPixelStruct(@char, font, transformation);
     }
 
     public static PixelStructRGB GenerateCharPixelStructRGB(char @char, Font font, Matrix? transformation = null)
@@ -231,11 +268,9 @@ public static partial class GraphicsUtils
             var fontDim = g.MeasureString(str, font);
 
             var pos = new PointF(
-                (ScaleWidth / 2) - fontDim.Width / 2,
-                (ScaleHeight / 2) - fontDim.Height / 2
+                (ScaleWidth / 2f) - fontDim.Width / 2f,
+                (ScaleHeight / 2f) - fontDim.Height / 2f
             );
-
-            var oldTransform = g.Transform;
 
             g.Clear(Color.Black);
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
@@ -258,7 +293,6 @@ public static partial class GraphicsUtils
             );
         }
 
-        var result = new ColorRGB[Size];
         var index = 0;
         var pixels = new PixelStructRGB(@char - '0', Size);
 
@@ -292,11 +326,9 @@ public static partial class GraphicsUtils
             var fontDim = g.MeasureString(str, font);
 
             var pos = new PointF(
-                (ScaleWidth / 2) - fontDim.Width / 2,
-                (ScaleHeight / 2) - fontDim.Height / 2
+                (ScaleWidth / 2f) - fontDim.Width / 2f,
+                (ScaleHeight / 2f) - fontDim.Height / 2f
             );
-
-            var oldTransform = g.Transform;
 
             g.Clear(Color.Black);
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
@@ -319,7 +351,6 @@ public static partial class GraphicsUtils
             );
         }
 
-        var result = new float[Size];
         var index = 0;
         var brightStruct = new PixelStruct(@char - '0', Size);
 

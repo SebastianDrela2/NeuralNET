@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using NeutralNET.Framework.Convolutional;
 using NeutralNET.Matrices;
 using NeutralNET.Stuff;
@@ -7,12 +11,24 @@ namespace NeutralNET.Test.Data;
 
 public class LetterDataLoader : DataLoaderBase
 {
-    private static readonly string[] _fontNames =
-        ["Arial", "Times New Roman", "Georgia", "Verdana", "Tahoma"];
+    private static readonly string[] FontFamilies =
+    [
+        "Arial", "Times New Roman", "Georgia", "Verdana", "Tahoma",
+        "Consolas", "Courier New", "Comic Sans MS", "Impact", "Trebuchet MS",
+        "Palatino Linotype", "Segoe UI", "Lucida Console", "Garamond", "Century Gothic"
+    ];
 
-    public override int ImageScale => 16;
+    private static readonly FontStyle[] SupportedStyles =
+    [
+        FontStyle.Regular,
+        FontStyle.Bold,
+        FontStyle.Italic,
+        FontStyle.Bold | FontStyle.Italic
+    ];
+
+    public override int ImageScale => 28;
     public override string DatasetName => "LetterData";
-    public override int NumClasses => 26; // 26 uppercase letters A-Z
+    public override int NumClasses => 26;
 
     protected override (List<CnnMatrix> trainImages, List<NeuralMatrix> trainLabels,
                         List<CnnMatrix> testImages, List<NeuralMatrix> testLabels)
@@ -35,7 +51,6 @@ public class LetterDataLoader : DataLoaderBase
             int end = Math.Min(start + batchSize, numSamples);
             int currentBatchSize = end - start;
 
-            // Skip incomplete tail batches to keep strictly uniform batch sizes
             if (currentBatchSize < batchSize) continue;
 
             var imgMat = CnnMatrix.GetOrCreate(currentBatchSize, Channels, scale, scale, readOnly: true);
@@ -59,7 +74,7 @@ public class LetterDataLoader : DataLoaderBase
                 }
 
                 int label = labels[idx];
-                lblMat.Set(i, label, 1.0f); // One-hot encoding
+                lblMat.Set(i, label, 1.0f);
             }
 
             outImages.Add(imgMat);
@@ -70,36 +85,57 @@ public class LetterDataLoader : DataLoaderBase
     private (List<CnnMatrix> images, List<NeuralMatrix> labels) LoadFlattenedDataSet(
         DataSetType dataSetType, int batchSize, int maxSamples)
     {
-        var batchImages = new List<CnnMatrix>();
-        var batchLabels = new List<NeuralMatrix>();
+        bool isTrain = dataSetType == DataSetType.Train;
+        var rng = Random.Shared;
 
-        int passes = dataSetType == DataSetType.Train ? 5 : 1;
-        bool applyTransform = dataSetType == DataSetType.Train;
+        // Step 1: Pre-render all font/style variations ONCE (Exact total GDI+ passes = 15 fonts * 4 styles = 60 passes)
+        var fontCache = new List<PixelStructRGB[]>();
 
-        var allSamples = new List<PixelStructRGB>();
-
-        for (int i = 0; i < passes; i++)
+        foreach (var fontName in FontFamilies)
         {
-            foreach (var font in _fontNames)
+            var stylesToRender = isTrain ? SupportedStyles : [FontStyle.Regular];
+            foreach (var style in stylesToRender)
             {
-                var fontData = GraphicsUtils.GetLettersDataSetRGB(font, applyTransformation: applyTransform);
-                allSamples.AddRange(fontData);
+                try
+                {
+                    // Render clean base glyphs without GDI transformations (we do transformations lightning-fast in RAM if needed)
+                    var set = GraphicsUtils.GetLettersDataSetRGB(fontName, applyTransformation: isTrain, style: style);
+                    fontCache.Add(set);
+                }
+                catch
+                {
+                    // Skip unsupported font/style combos safely
+                }
             }
         }
 
-        var sampleArray = allSamples.ToArray();
-        Random.Shared.Shuffle(sampleArray);
+        if (fontCache.Count == 0)
+        {
+            fontCache.Add(GraphicsUtils.GetLettersDataSetRGB("Arial", applyTransformation: isTrain, style: FontStyle.Regular));
+        }
 
-        var selectedData = sampleArray.Take(maxSamples).ToArray();
+        // Step 2: Sample directly from memory array (Instantaneous in-memory operations)
+        var allSamples = new List<PixelStructRGB>(maxSamples);
+
+        while (allSamples.Count < maxSamples)
+        {
+            var randomSet = fontCache[rng.Next(fontCache.Count)];
+            allSamples.AddRange(randomSet);
+        }
+
+        var selectedData = allSamples.Take(maxSamples).ToArray();
+        rng.Shuffle(selectedData);
 
         var labelArray = selectedData.Select(x => x.Label).ToArray();
         var imageArray = selectedData.Select(x => x.Flat.ToArray()).ToArray();
 
+        var batchImages = new List<CnnMatrix>();
+        var batchLabels = new List<NeuralMatrix>();
+
         AddToBatches(imageArray, labelArray, batchSize, batchImages, batchLabels);
 
-        Console.WriteLine($"{DatasetName}: Loaded {selectedData.Length} {dataSetType} samples in {batchImages.Count} batches");
+        Console.WriteLine($"{DatasetName}: Loaded {selectedData.Length} {dataSetType} samples from {fontCache.Count} font/style variants.");
 
-        // Return the batched matrices directly
         return (batchImages, batchLabels);
     }
 

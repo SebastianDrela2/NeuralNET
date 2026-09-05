@@ -16,9 +16,6 @@ internal class Program
         var config = TrainingConfig.CreateDefault(loader.NumClasses);
 
         config.DatasetKey = datasetKey;
-        config.BatchSize = 64;
-        config.MaxTrainSamples = 60_000;
-        config.MaxTestSamples = 3_000;
 
         var dataSet = loader.LoadCompleteDataset(
             batchSize: config.BatchSize,
