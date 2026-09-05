@@ -4,5 +4,7 @@ public enum DataSourceType
 {
     Cifar10,
     DigiDigi,
-    MNIST
+    MNIST,
+
+    Letters
 }

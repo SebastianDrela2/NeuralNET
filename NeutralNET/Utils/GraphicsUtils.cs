@@ -30,6 +30,111 @@ public static partial class GraphicsUtils
     [SupportedOSPlatformGuard("windows6.1")]
     public static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(6, 1);
 
+    #region Letter Data Generation (NEW)
+
+    public static readonly char[] DefaultLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToCharArray();
+
+    public static PixelStructRGB[] GetLettersDataSetRGB(string fontName, bool applyTransformation = true)
+    {
+        return GetLettersDataSetRGB(fontName, DefaultLetters, applyTransformation);
+    }
+
+    public static PixelStructRGB[] GetLettersDataSetRGB(string fontName, char[] characters, bool applyTransformation = true)
+    {
+        if (!IsSupported)
+        {
+            throw new NotSupportedException();
+        }
+
+        var result = new PixelStructRGB[characters.Length];
+        using var font = new Font(fontName, FontSize * UpScale, FontStyle.Regular);
+
+        for (var i = 0; i < characters.Length; ++i)
+        {
+            Matrix? transformation;
+
+            if (applyTransformation)
+            {
+                var angle = float.Lerp(-5, 5, _rng.NextSingle());
+                var scaleX = float.Lerp(0.95f, 1.05f, _rng.NextSingle());
+                var scaleY = float.Lerp(0.95f, 1.05f, _rng.NextSingle());
+
+                transformation = CreateTranformationMatrix(angle, scaleX, scaleY);
+            }
+            else
+            {
+                transformation = CreateTranformationMatrix(0, 1, 1);
+            }
+
+            // Index 'i' (0-25) is used as the class label
+            result[i] = GenerateCharPixelStructRGB(characters[i], font, i, transformation);
+        }
+
+        return result;
+    }
+
+    public static PixelStructRGB GenerateCharPixelStructRGB(char @char, Font font, int classLabel, Matrix? transformation = null)
+    {
+        if (!IsSupported)
+        {
+            throw new NotSupportedException();
+        }
+
+        transformation ??= new Matrix();
+
+        using var bitMap = new Bitmap(ScaleWidth, ScaleHeight, PixelFormat.Format32bppArgb);
+        using var trueBitMap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
+
+        using (var g = Graphics.FromImage(bitMap))
+        {
+            var str = @char.ToString();
+            var fontDim = g.MeasureString(str, font);
+
+            var pos = new PointF(
+                (ScaleWidth / 2f) - fontDim.Width / 2f,
+                (ScaleHeight / 2f) - fontDim.Height / 2f
+            );
+
+            g.Clear(Color.Black);
+            g.TextRenderingHint = TextRenderingHint.AntiAlias;
+            g.Transform = transformation;
+            g.DrawString(str, font, Brushes.White, pos);
+            g.Flush();
+        }
+
+        using (var g = Graphics.FromImage(trueBitMap))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            g.DrawImage(
+                bitMap,
+                new Rectangle(0, 0, Width, Height),
+                new Rectangle(0, 0, ScaleWidth, ScaleHeight),
+                GraphicsUnit.Pixel
+            );
+        }
+
+        var index = 0;
+        var pixels = new PixelStructRGB(classLabel, Size);
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++, ++index)
+            {
+                var pixel = trueBitMap.GetPixel(x, y);
+                pixels.Values[index] = (pixel.R, pixel.G, pixel.B);
+            }
+        }
+
+        return pixels;
+    }
+
+    #endregion
+
+    #region Original Digit Data Generation (PRESERVED)
+
     public static PixelStructRGB[] GetDigitsDataSetRGB(string fontName, bool applyTransformation = true)
     {
         if (!IsSupported)
@@ -122,7 +227,6 @@ public static partial class GraphicsUtils
 
         using (var g = Graphics.FromImage(bitMap))
         {
-
             var str = @char.ToString();
             var fontDim = g.MeasureString(str, font);
 
@@ -153,8 +257,6 @@ public static partial class GraphicsUtils
                 GraphicsUnit.Pixel
             );
         }
-
-        //bitMap.Save($@"C:\Users\Sebastian\source\repos\NeutralNET\NeutralNET\bin\Debug\net9.0\Imuges\{@char}_{font.Name}_{DateTime.Now.Ticks}.png");
 
         var result = new ColorRGB[Size];
         var index = 0;
@@ -186,7 +288,6 @@ public static partial class GraphicsUtils
 
         using (var g = Graphics.FromImage(bitMap))
         {
-
             var str = @char.ToString();
             var fontDim = g.MeasureString(str, font);
 
@@ -217,8 +318,6 @@ public static partial class GraphicsUtils
                 GraphicsUnit.Pixel
             );
         }
-
-        //bitMap.Save($@"C:\Users\Sebastian\source\repos\NeutralNET\NeutralNET\bin\Debug\net9.0\Imuges\{@char}_{font.Name}_{DateTime.Now.Ticks}.png");
 
         var result = new float[Size];
         var index = 0;
@@ -341,4 +440,6 @@ public static partial class GraphicsUtils
 
         return m;
     }
+
+    #endregion
 }

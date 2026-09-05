@@ -6,7 +6,9 @@ namespace NeutralNET.Test.Data;
 
 public abstract class DataLoaderBase
 {
-    protected const int NumClasses = 10;
+    // Changed from "protected const int" to a virtual property so derived classes can override it
+    public virtual int NumClasses => 10;
+
     protected const int Channels = 3;
 
     /// <summary>

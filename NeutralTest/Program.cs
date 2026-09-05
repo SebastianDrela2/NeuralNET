@@ -15,51 +15,54 @@ internal class Program
 
     public static void RunCnnNetwork()
     {
-        var loader = DataLoaderFactory.Create(DataSourceType.Cifar10);
+        var loader = DataLoaderFactory.Create(DataSourceType.Letters);
+
+        const int batchSize = 32;
+
         var dataSet = loader.LoadCompleteDataset(
-           batchSize: 64,  // Smaller batch for better generalization with small data
-           maxTrainSamples: 5000,
-           maxTestSamples: 1000
+           batchSize: batchSize,
+           maxTrainSamples: 30000,
+           maxTestSamples: 3000
         );
 
         var cnnConfig = new CnnArchitectureConfig
         {
             ConvLayers =
             [
-                // === CONV 1: 32x32x3 → 16x16x32 ===
+                // === CONV 1: 16x16x3 → MaxPool → 8x8x32 ===
                 new() {
-            KernelHeight = 3,
-            KernelWidth = 3,
-            Filters = 32,
-            Stride = 1,
-            Padding = 1,
-            Activation = ActivationType.ReLU,
-            UseMaxPool = true,
-            PoolSize = 2
-        },
-        
-        // === CONV 2: 16x16x32 → 8x8x64 ===
-        new() {
-            KernelHeight = 3,
-            KernelWidth = 3,
-            Filters = 64,
-            Stride = 1,
-            Padding = 1,
-            Activation = ActivationType.ReLU,
-            UseMaxPool = true,
-            PoolSize = 2
-        },
+                    KernelHeight = 3,
+                    KernelWidth = 3,
+                    Filters = 32,
+                    Stride = 1,
+                    Padding = 1,
+                    Activation = ActivationType.ReLU,
+                    UseMaxPool = true,
+                    PoolSize = 2
+                },
+                
+                // === CONV 2: 8x8x32 → MaxPool → 4x4x64 ===
+                new() {
+                    KernelHeight = 3,
+                    KernelWidth = 3,
+                    Filters = 64,
+                    Stride = 1,
+                    Padding = 1,
+                    Activation = ActivationType.ReLU,
+                    UseMaxPool = true,
+                    PoolSize = 2
+                },
             ],
 
-            DenseArchitecture = [128, 10],  // Smaller dense layer = less overfitting
+            DenseArchitecture = [128, loader.NumClasses],
             DenseHiddenActivation = ActivationType.ReLU,
             OutputActivation = ActivationType.Softmax,
 
             OptimizerConfig = new CnnOptimizerConfig
             {
                 OptimizerType = CnnOptimizerType.Adam,
-                LearningRate = 0.001f,
-                WeightDecay = 0.001f,
+                LearningRate = 0.0003f,
+                WeightDecay = 1e-4f,
                 Beta1 = 0.9f,
                 Beta2 = 0.999f,
                 Epsilon = 1e-8f
@@ -68,11 +71,11 @@ internal class Program
 
         var denseConfig = new NeuralNetworkConfig
         {
-            LearningRate = 0.001f,
-            WeightDecay = 0.001f,   
-            BatchSize = 64,
-            Epochs = 50,            
-            DropoutRate = 0.2f,     
+            LearningRate = 0.0003f,
+            WeightDecay = 1e-4f,
+            BatchSize = batchSize,
+            Epochs = 100,
+            DropoutRate = 0.25f,
             WithShuffle = true,
             OptimizerType = OptimizerType.Adam,
             Model = null
@@ -83,102 +86,47 @@ internal class Program
             .WithDenseConfig(denseConfig)
             .WithInputSize(loader.ImageScale, loader.ImageScale, 3)
             .Build();
+
         var validator = new CnnValidator();
-        //DiagnoseNetwork(network, dataSet);
-        TrainAndRenderTable(network, validator, dataSet, loader.DatasetName);
+
+        TrainAndRenderTable(network, validator, dataSet, loader.DatasetName, loader.NumClasses);
 
         Console.WriteLine("\n=== FINAL EVALUATION ===");
         var finalResult = validator.Validate(network, dataSet.TestImages, dataSet.TestLabels);
         validator.PrintResults(finalResult);
 
-        foreach (var img in dataSet.TrainImages) img.Dispose();
-        foreach (var lbl in dataSet.TrainLabels) lbl.Dispose();
-        foreach (var img in dataSet.TestImages) img.Dispose();
-        foreach (var lbl in dataSet.TestLabels) lbl.Dispose();
-    }
-
-    private static void DiagnoseNetwork(CnnNetwork<Architecture> network, NeuralDataset dataSet)
-    {
-        Console.WriteLine("\n=== NETWORK DIAGNOSTIC ===\n");
-
-        // 1. Check input data
-        var firstImage = dataSet.TrainImages[0];
-        Console.WriteLine($"Input shape: {firstImage.Batch}x{firstImage.Channels}x{firstImage.Height}x{firstImage.Width}");
-
-        float min = float.MaxValue, max = float.MinValue, sum = 0;
-        int count = 0;
-        for (int b = 0; b < firstImage.Batch; b++)
-            for (int c = 0; c < firstImage.Channels; c++)
-                for (int y = 0; y < firstImage.Height; y++)
-                    for (int x = 0; x < firstImage.Width; x++)
-                    {
-                        float v = firstImage[b, c, y, x];
-                        if (v < min) min = v;
-                        if (v > max) max = v;
-                        sum += v;
-                        count++;
-                    }
-        Console.WriteLine($"Pixel values: Min={min:F4}, Max={max:F4}, Avg={sum / count:F4}");
-        Console.WriteLine($"Expected: Min=0, Max=1, Avg~0.1-0.2\n");
-
-        // 2. Check labels
-        var firstLabel = dataSet.TrainLabels[0];
-        Console.WriteLine($"Label shape: {firstLabel.Rows}x{firstLabel.UsedColumns}");
-        Console.Write("First label row: ");
-        for (int j = 0; j < firstLabel.UsedColumns; j++)
-            Console.Write($"{firstLabel.At(0, j):F0} ");
-        Console.WriteLine("\n");
-
-        // 3. Forward pass debug - get raw logits and softmax output
-        Console.WriteLine("=== FORWARD PASS DEBUG ===");
-        var pred = network.Forward(firstImage);
-        Console.WriteLine($"Output shape: {pred.Rows}x{pred.UsedColumns}");
-
-        Console.Write("Softmax output (first row): ");
-        float sumProbs = 0;
-        for (int j = 0; j < 10; j++)
-        {
-            float v = pred.At(0, j);
-            sumProbs += v;
-            Console.Write($"{v:F4} ");
-        }
-        Console.WriteLine($"\nSum of probabilities: {sumProbs:F6} (should be ~1.0)");
-
-        if (sumProbs < 0.5f)
-            Console.WriteLine("❌ SOFTMAX IS BROKEN - all outputs are zero!");
-        pred.Dispose();
-
-        // 4. Train one batch and check gradients
-        Console.WriteLine("\n=== GRADIENT DEBUG ===");
-        float loss = network.TrainBatch(firstImage, firstLabel, 0.001f);
-        Console.WriteLine($"Loss after one batch: {loss:F4} (should be ~2.3, not 14.5)");
-
-        if (loss > 10f)
-            Console.WriteLine("❌ LOSS TOO HIGH - gradients are not working!");
+        foreach (var img in dataSet.TrainImages) img?.Dispose();
+        foreach (var lbl in dataSet.TrainLabels) lbl?.Dispose();
+        foreach (var img in dataSet.TestImages) img?.Dispose();
+        foreach (var lbl in dataSet.TestLabels) lbl?.Dispose();
     }
 
     private static void TrainAndRenderTable(
-    CnnNetwork<Architecture> network,
-    CnnValidator validator,
-    NeuralDataset dataSet,
-    string datasetName)
+        CnnNetwork<Architecture> network,
+        CnnValidator validator,
+        NeuralDataset dataSet,
+        string datasetName,
+        int numClasses)
     {
-        var learningRate = 0.001f;
-        var maxEpochs = 2000;
-        var earlyStopPatience = 3000;
+        var learningRate = 0.0003f;
+        var earlyStopPatience = 300;
         var targetAccuracy = 0.98f;
         var bestAccuracy = 0f;
+        var accuracy = 0f;
         var epochsSinceBest = 0;
 
-        // Get test data as single batches for validation
         var testImages = dataSet.TestImages;
         var testLabels = dataSet.TestLabels;
 
+        string hBorderMid = new string('═', numClasses * 6 + 1);
+        string headerLabels = string.Join("", Enumerable.Range(0, numClasses).Select(i => $"  {(char)('A' + i)}   "));
+
         Console.Write("\e[2J\e[3J\e[H");
-        for (int epoch = 0; epoch < maxEpochs; epoch++)
+        for (int epoch = 0; ; epoch++)
         {
             var totalLoss = 0f;
 
+            // Train Epoch
             for (int batchIdx = 0; batchIdx < dataSet.TrainImages.Count; batchIdx++)
             {
                 float loss = network.TrainBatch(dataSet.TrainImages[batchIdx], dataSet.TrainLabels[batchIdx], learningRate);
@@ -187,71 +135,104 @@ internal class Program
 
             var avgLoss = totalLoss / dataSet.TrainImages.Count;
 
-            //if ((epoch & ((1 << 1) - 1)) == 0)
-            {
-                var result = validator.Validate(network, testImages, testLabels);
-                float accuracy = result.Accuracy;
-                Console.Write("\e[H");
-                Console.WriteLine($"╔══════════════╤══════════════════╤════════════════════╤═════════════════════════════╗\e[K");
-                Console.WriteLine($"║  Epoch {epoch + 1,5} │ Loss: {avgLoss,9:F6}  │  Accuracy: {accuracy,7:P2} │  Best: {bestAccuracy,7:P2}              ║\e[K");
-                Console.WriteLine($"╠═══════╤══════╧══════════════════╧════════════════════╧══════════════╤══════════════╣\e[K");
-                Console.WriteLine($"║       │     0     1     2     3     4     5     6     7     8     9 │ Pred  Actual ║\e[K");
-                Console.WriteLine($"╠═══════╪═════════════════════════════════════════════════════════════╪══════════════╣\e[K");
+            var result = validator.Validate(network, testImages, testLabels);
+            accuracy = result.Accuracy;
 
-                var numSamples = Math.Min(10, testImages.Count);
+            Console.Write("\e[H");
+            Console.WriteLine($"╔══════════════╤{hBorderMid}╤══════════════╗\e[K");
+            Console.WriteLine($"║  Epoch {epoch + 1,5} │ Loss: {avgLoss,9:F6}  │  Accuracy: {accuracy,7:P2} │  Best: {bestAccuracy,7:P2}  ║\e[K");
+            Console.WriteLine($"╠═══════╤══════╧{hBorderMid}╧══════════════╣\e[K");
+            Console.WriteLine($"║       │{headerLabels}│ Pred  Actual ║\e[K");
+            Console.WriteLine($"╠═══════╪{hBorderMid}╪══════════════╣\e[K");
+
+            if (testImages.Count > 0)
+            {
+                var sampleBatch = testImages[0];
+                var sampleLabels = testLabels[0];
+                var pred = network.Forward(sampleBatch);
+
+                var numSamples = Math.Min(numClasses, sampleBatch.Batch);
                 for (int i = 0; i < numSamples; i++)
                 {
-                    var pred = network.Forward(testImages[i]);
-                    var probs = new float[10];
-
-                    for (var j = 0; j < 10; j++)
+                    var probs = new float[numClasses];
+                    for (var j = 0; j < numClasses; j++)
                     {
-                        probs[j] = pred.At(0, j);
+                        probs[j] = pred.At(i, j);
                     }
 
                     var predicted = ArgMax(probs);
-                    var actual = GetActualLabel(testLabels[i]);
+                    var actual = GetActualLabelFromRow(sampleLabels, i, numClasses);
+
+                    char predChar = (char)('A' + predicted);
+                    char actualChar = actual >= 0 ? (char)('A' + actual) : '?';
 
                     Console.Write($"║ {i,2}    │");
-                    for (int j = 0; j < 10; j++)
+                    for (int j = 0; j < numClasses; j++)
                     {
                         Console.Write($" {FmtPogression(probs[j], j == actual)}");
                     }
 
-                    Console.WriteLine($" │  {(predicted == actual ? AsGreen(predicted.ToString()) : AsRed(predicted.ToString())),2}      {actual,2}   ║\e[K");
-
-                    pred.Dispose();
+                    Console.WriteLine($" │  {(predicted == actual ? AsGreen(predChar.ToString()) : AsRed(predChar.ToString())),2}      {actualChar,2}   ║\e[K");
                 }
+                pred.Dispose();
+            }
 
-                Console.WriteLine($"╚═══════╧═════════════════════════════════════════════════════════════╧══════════════╝\e[K");
-                Console.WriteLine();
-                Console.WriteLine($"Best accuracy: {bestAccuracy:P2}  |  Epochs since best: {epochsSinceBest}\e[K");
+            Console.WriteLine($"╚═══════╧{hBorderMid}╧══════════════╝\e[K");
+            Console.WriteLine();
+            Console.WriteLine($"Best accuracy: {bestAccuracy:P2}  |  Epochs since best: {epochsSinceBest}\e[K");
 
-                if (accuracy > bestAccuracy)
-                {
-                    bestAccuracy = accuracy;
-                    epochsSinceBest = 0;
-                    // Console.WriteLine($"*** NEW BEST! ***");
-                }
-                else
-                {
-                    epochsSinceBest++;
-                }
+            if (accuracy > bestAccuracy)
+            {
+                bestAccuracy = accuracy;
+                epochsSinceBest = 0;
+            }
+            else
+            {
+                epochsSinceBest++;
+            }
 
-                if (accuracy >= targetAccuracy)
-                {
-                    Console.WriteLine($"\n🎯 Target accuracy {targetAccuracy:P2} reached! Stopping early at epoch {epoch + 1}");
-                    break;
-                }
+            if (epoch % 10 == 0)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
 
-                if (epochsSinceBest >= earlyStopPatience && bestAccuracy > 0.5f)
-                {
-                    Console.WriteLine($"\n⏹️ No improvement for {earlyStopPatience} epochs. Stopping early at epoch {epoch + 1}");
-                    Console.WriteLine($"Best accuracy: {bestAccuracy:P2}");
-                    break;
-                }
+            if (accuracy >= targetAccuracy)
+            {
+                Console.WriteLine($"\n🎯 Target accuracy {targetAccuracy:P2} reached! Stopping early at epoch {epoch + 1}");
+                break;
+            }
+
+            if (epochsSinceBest >= earlyStopPatience && bestAccuracy > 0.4f)
+            {
+                Console.WriteLine($"\n⏹️ No improvement for {earlyStopPatience} epochs. Stopping early at epoch {epoch + 1}");
+                Console.WriteLine($"Best accuracy: {bestAccuracy:P2}");
+                break;
             }
         }
+    }
+
+    private static int GetActualLabelFromRow(NeuralMatrix labelMatrix, int row, int numClasses)
+    {
+        int maxIndex = -1;
+        float maxValue = -1f;
+
+        for (int i = 0; i < labelMatrix.UsedColumns; i++)
+        {
+            float val = labelMatrix.At(row, i);
+            if (val > maxValue)
+            {
+                maxValue = val;
+                maxIndex = i;
+            }
+        }
+
+        if (maxIndex >= numClasses)
+        {
+            maxIndex = numClasses - 1;
+        }
+
+        return maxIndex;
     }
 
     private static string FmtPogression(float x, bool hl)
@@ -301,15 +282,6 @@ internal class Program
             if (array[i] > array[maxIdx]) maxIdx = i;
         }
         return maxIdx;
-    }
-
-    private static int GetActualLabel(NeuralMatrix labelMatrix)
-    {
-        for (int i = 0; i < 10; i++)
-        {
-            if (labelMatrix.At(0, i) > 0.5f) return i;
-        }
-        return -1;
     }
 
     private static string AsGreen(string x) => $"\e[38;2;124;179;66m{x}\e[39m";

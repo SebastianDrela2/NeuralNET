@@ -12,6 +12,7 @@ public static class DataLoaderFactory
             DataSourceType.Cifar10 => new Cifar10DataLoader(),
             DataSourceType.DigiDigi => new DigiDigiDataLoader(),
             DataSourceType.MNIST => new MNISTDataLoader(),
+            DataSourceType.Letters => new LetterDataLoader(),
             _ => throw new ArgumentException($"Unsupported data source type: {sourceType}")
         };
     }
