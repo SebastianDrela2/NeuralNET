@@ -1,6 +1,7 @@
 using NeutralNET.Framework.Convolutional;
 using NeutralNET.Matrices;
 using NeutralNET.Stuff;
+using NeutralNET.Utils;
 
 namespace NeutralNET.Test.Data;
 
@@ -67,32 +68,35 @@ public class DigiDigiDataLoader : DataLoaderBase
     {
         var batchImages = new List<CnnMatrix>();
         var batchLabels = new List<NeuralMatrix>();
-        int samplesLoaded = 0;
-        var fontNames = _fontNames.ToArray();
-        int batchCount = dataSetType == DataSetType.Train ? 5 : 1;
 
-        for (int i = 1; i <= batchCount; i++)
+        // Generate synthetic font dataset iterations cleanly without skipping
+        int passes = dataSetType == DataSetType.Train ? 5 : 1;
+        bool applyTransform = dataSetType == DataSetType.Train;
+
+        var allSamples = new List<PixelStructRGB>();
+
+        for (int i = 0; i < passes; i++)
         {
-            if (samplesLoaded >= maxSamples)
-                break;
-
-            Random.Shared.Shuffle(fontNames);
-
-            var data = fontNames
-                .SelectMany(font => GraphicsUtils.GetDigitsDataSetRGB(font))
-                .Skip(samplesLoaded)
-                .Take(maxSamples - samplesLoaded);
-
-            var (labelArray, imageArray) = (
-                data.Select(x => x.Label).ToArray(),
-                data.Select(x => x.Flat.ToArray()).ToArray()
-            );
-
-            AddToBatches(imageArray, labelArray, batchSize, batchImages, batchLabels);
-            samplesLoaded += imageArray.Length;
+            foreach (var font in _fontNames)
+            {
+                var fontData = GraphicsUtils.GetDigitsDataSetRGB(font, applyTransformation: applyTransform);
+                allSamples.AddRange(fontData);
+            }
         }
 
-        Console.WriteLine($"{DatasetName}: Loaded {samplesLoaded} {dataSetType} samples in {batchImages.Count} batches");
+        // Shuffle all collected samples
+        var sampleArray = allSamples.ToArray();
+        Random.Shared.Shuffle(sampleArray);
+
+        // Take only up to maxSamples requested
+        var selectedData = sampleArray.Take(maxSamples).ToArray();
+
+        var labelArray = selectedData.Select(x => x.Label).ToArray();
+        var imageArray = selectedData.Select(x => x.Flat.ToArray()).ToArray();
+
+        AddToBatches(imageArray, labelArray, batchSize, batchImages, batchLabels);
+
+        Console.WriteLine($"{DatasetName}: Loaded {selectedData.Length} {dataSetType} samples in {batchImages.Count} batches");
 
         var flatImages = FlattenBatchesToImages(batchImages);
         var flatLabels = FlattenBatchesToLabels(batchLabels);

@@ -15,46 +15,51 @@ internal class Program
 
     public static void RunCnnNetwork()
     {
-        var loader = DataLoaderFactory.Create(DataSourceType.MNIST);
+        var loader = DataLoaderFactory.Create(DataSourceType.Cifar10);
         var dataSet = loader.LoadCompleteDataset(
-           batchSize: 64,
+           batchSize: 64,  // Smaller batch for better generalization with small data
            maxTrainSamples: 5000,
            maxTestSamples: 1000
-       );
+        );
 
         var cnnConfig = new CnnArchitectureConfig
         {
             ConvLayers =
-    [
-        new() {
+            [
+                // === CONV 1: 32x32x3 → 16x16x32 ===
+                new() {
             KernelHeight = 3,
             KernelWidth = 3,
             Filters = 32,
             Stride = 1,
             Padding = 1,
-            Activation = ActivationType.LeakyReLU,
+            Activation = ActivationType.ReLU,
             UseMaxPool = true,
-            PoolSize = 2 // 28x28 -> 14x14
+            PoolSize = 2
         },
+        
+        // === CONV 2: 16x16x32 → 8x8x64 ===
         new() {
             KernelHeight = 3,
             KernelWidth = 3,
             Filters = 64,
             Stride = 1,
             Padding = 1,
-            Activation = ActivationType.LeakyReLU,
+            Activation = ActivationType.ReLU,
             UseMaxPool = true,
-            PoolSize = 2 // 14x14 -> 7x7
-        }
-    ],
-            DenseArchitecture = [128, 10],
-            DenseHiddenActivation = ActivationType.LeakyReLU,
+            PoolSize = 2
+        },
+            ],
+
+            DenseArchitecture = [128, 10],  // Smaller dense layer = less overfitting
+            DenseHiddenActivation = ActivationType.ReLU,
             OutputActivation = ActivationType.Softmax,
+
             OptimizerConfig = new CnnOptimizerConfig
             {
                 OptimizerType = CnnOptimizerType.Adam,
                 LearningRate = 0.001f,
-                WeightDecay = 0.0001f,
+                WeightDecay = 0.001f,
                 Beta1 = 0.9f,
                 Beta2 = 0.999f,
                 Epsilon = 1e-8f
@@ -64,10 +69,10 @@ internal class Program
         var denseConfig = new NeuralNetworkConfig
         {
             LearningRate = 0.001f,
-            WeightDecay = 0.0001f,
+            WeightDecay = 0.001f,   
             BatchSize = 64,
-            Epochs = 15,
-            DropoutRate = 0.25f,
+            Epochs = 50,            
+            DropoutRate = 0.2f,     
             WithShuffle = true,
             OptimizerType = OptimizerType.Adam,
             Model = null
@@ -285,7 +290,7 @@ internal class Program
             xs[maxEnd] = (char)(ChMax + (7 - frame));
         }
 
-        return $"{xs}";
+        return $"\e[38;2;{(hl ? hlFg : fg)}m{xs}\e[39m";
     }
 
     private static int ArgMax(float[] array)

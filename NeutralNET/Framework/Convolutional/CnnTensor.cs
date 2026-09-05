@@ -17,7 +17,7 @@ public unsafe class CnnMatrix : IDisposable
     private const int ByteAlignment = Alignment * sizeof(float);
 
     private static readonly ConcurrentBag<CnnMatrix> _pool = [];
-    private static readonly int CommonAllocatedLength = 0x400000; // 2,621,440 floats
+    private static readonly int CommonAllocatedLength = 4_734_976; // 2,621,440 floats
 
     public float* Pointer;
     public int Batch;
@@ -53,6 +53,11 @@ public unsafe class CnnMatrix : IDisposable
         Width = width;
         ReadOnly = readOnly;
         UnsafeSize = batch * channels * height * width;
+
+        if (UnsafeSize > CommonAllocatedLength)
+        {
+            throw new InvalidOperationException($"Tensor size {UnsafeSize} exceeds pool buffer size {CommonAllocatedLength}.");
+        }
 
         Pointer = (float*)NativeMemory.AlignedAlloc((nuint)(CommonAllocatedLength * sizeof(float)), (nuint)ByteAlignment);
         _inUse = true;

@@ -21,7 +21,7 @@ public unsafe class NeuralMatrix : IDisposable
     private const int ByteAlignment = Alignment * sizeof(float);
 
     private static readonly ConcurrentBag<NeuralMatrix> _pool = [];
-    private static readonly int CommonAllocatedLength = 6422528;
+    private static readonly int CommonAllocatedLength = 37748736;
 
     private readonly int _allocatedLength;
 
