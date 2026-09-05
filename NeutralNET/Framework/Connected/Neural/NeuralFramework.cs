@@ -166,6 +166,93 @@ public unsafe class NeuralFramework<TArch> where TArch : IArchitecture<TArch>
         return Architecture.MatrixNeurons[^1];
     }
 
+    #region Save and Load Capabilities
+
+    public void SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        Directory.CreateDirectory(directoryPath);
+        var filePath = Path.Combine(directoryPath, $"{typeof(TEnum).Name}_{key}.bin");
+        using var stream = File.Create(filePath);
+
+        using var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        writer.Write(key.ToString());
+        writer.Write(Architecture.Count);
+
+        for (int i = 0; i < Architecture.Count; i++)
+        {
+            SaveNeuralMatrix(writer, Architecture.MatrixWeights[i]);
+            SaveNeuralMatrix(writer, Architecture.MatrixBiases[i]);
+        }
+    }
+
+    public void LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        var filePath = Path.Combine(directoryPath, $"{typeof(TEnum).Name}_{key}.bin");
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Weights file for key '{key}' not found at {filePath}");
+        }
+
+        using var stream = File.OpenRead(filePath);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+
+        var savedKey = reader.ReadString();
+        if (!string.Equals(savedKey, key.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Enum key mismatch. Expected: {key}, Found: {savedKey}");
+        }
+
+        int count = reader.ReadInt32();
+        if (count != Architecture.Count)
+        {
+            throw new InvalidOperationException("Architecture layer count mismatch.");
+        }
+
+        for (int i = 0; i < Architecture.Count; i++)
+        {
+            LoadNeuralMatrix(reader, Architecture.MatrixWeights[i]);
+            LoadNeuralMatrix(reader, Architecture.MatrixBiases[i]);
+        }
+    }
+
+    private static void SaveNeuralMatrix(BinaryWriter writer, NeuralMatrix matrix)
+    {
+        writer.Write(matrix.Rows);
+        writer.Write(matrix.UsedColumns);
+
+        float* ptr = matrix.Pointer;
+        int stride = matrix.ColumnsStride;
+
+        for (int r = 0; r < matrix.Rows; r++)
+        {
+            float* rowPtr = ptr + r * stride;
+            for (int c = 0; c < matrix.UsedColumns; c++)
+            {
+                writer.Write(rowPtr[c]);
+            }
+        }
+    }
+
+    private static void LoadNeuralMatrix(BinaryReader reader, NeuralMatrix matrix)
+    {
+        int rows = reader.ReadInt32();
+        int cols = reader.ReadInt32();
+
+        float* ptr = matrix.Pointer;
+        int stride = matrix.ColumnsStride;
+
+        for (int r = 0; r < matrix.Rows; r++)
+        {
+            float* rowPtr = ptr + r * stride;
+            for (int c = 0; c < matrix.UsedColumns; c++)
+            {
+                rowPtr[c] = reader.ReadSingle();
+            }
+        }
+    }
+
+    #endregion
+
     private void HandleTraining(IModel model)
     {
         var batchProcessCount = 0;

@@ -157,6 +157,177 @@ public sealed unsafe class CnnNeuralFramework<TArch> : IDisposable
         }
     }
 
+    #region Save and Load Weights / Biases
+
+    /// <summary>
+    /// Saves all convolutional and dense weights and biases to a binary stream keyed by an enum.
+    /// </summary>
+    public void SaveWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    {
+        using var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+
+        // Header metadata
+        writer.Write(key.ToString());
+        writer.Write(_convWeights.Count);
+        writer.Write(_denseWeights.Count);
+
+        // Write Conv Weights & Biases
+        for (int i = 0; i < _convWeights.Count; i++)
+        {
+            SaveCnnMatrix(writer, _convWeights[i]);
+            SaveCnnMatrix(writer, _convBiases[i]);
+        }
+
+        // Write Dense Weights & Biases
+        for (int i = 0; i < _denseWeights.Count; i++)
+        {
+            SaveNeuralMatrix(writer, _denseWeights[i]);
+            SaveNeuralMatrix(writer, _denseBiases[i]);
+        }
+
+        writer.Flush();
+    }
+
+    /// <summary>
+    /// Saves weights to a file path formatted with the given enum name.
+    /// </summary>
+    public void SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        Directory.CreateDirectory(directoryPath);
+        var filePath = Path.Combine(directoryPath, $"{typeof(TEnum).Name}_{key}.bin");
+        using var stream = File.Create(filePath);
+        SaveWeights(key, stream);
+    }
+
+    /// <summary>
+    /// Loads convolutional and dense weights and biases from a binary stream matching the given enum.
+    /// </summary>
+    public void LoadWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    {
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+
+        var savedEnumKey = reader.ReadString();
+        if (!string.Equals(savedEnumKey, key.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Mismatch enum key in model file. Expected: '{key}', Found: '{savedEnumKey}'.");
+        }
+
+        int convCount = reader.ReadInt32();
+        int denseCount = reader.ReadInt32();
+
+        if (convCount != _convWeights.Count || denseCount != _denseWeights.Count)
+        {
+            throw new InvalidOperationException("Layer count mismatch between framework and checkpoint file.");
+        }
+
+        // Read Conv Weights & Biases
+        for (int i = 0; i < _convWeights.Count; i++)
+        {
+            LoadCnnMatrix(reader, _convWeights[i]);
+            LoadCnnMatrix(reader, _convBiases[i]);
+        }
+
+        // Read Dense Weights & Biases
+        for (int i = 0; i < _denseWeights.Count; i++)
+        {
+            LoadNeuralMatrix(reader, _denseWeights[i]);
+            LoadNeuralMatrix(reader, _denseBiases[i]);
+        }
+    }
+
+    /// <summary>
+    /// Loads weights from a file named after the target enum value.
+    /// </summary>
+    public void LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        var filePath = Path.Combine(directoryPath, $"{typeof(TEnum).Name}_{key}.bin");
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Checkpoint file not found for key '{key}' at path: {filePath}");
+        }
+
+        using var stream = File.OpenRead(filePath);
+        LoadWeights(key, stream);
+    }
+
+    private static void SaveCnnMatrix(BinaryWriter writer, CnnMatrix matrix)
+    {
+        writer.Write(matrix.Batch);
+        writer.Write(matrix.Channels);
+        writer.Write(matrix.Height);
+        writer.Write(matrix.Width);
+
+        int totalElements = matrix.UnsafeSize;
+        float* ptr = matrix.Pointer;
+        for (int i = 0; i < totalElements; i++)
+        {
+            writer.Write(ptr[i]);
+        }
+    }
+
+    private static void LoadCnnMatrix(BinaryReader reader, CnnMatrix matrix)
+    {
+        int b = reader.ReadInt32();
+        int c = reader.ReadInt32();
+        int h = reader.ReadInt32();
+        int w = reader.ReadInt32();
+
+        if (b != matrix.Batch || c != matrix.Channels || h != matrix.Height || w != matrix.Width)
+        {
+            throw new InvalidOperationException("CnnMatrix dimensions mismatch when loading standard layer.");
+        }
+
+        int totalElements = matrix.UnsafeSize;
+        float* ptr = matrix.Pointer;
+        for (int i = 0; i < totalElements; i++)
+        {
+            ptr[i] = reader.ReadSingle();
+        }
+    }
+
+    private static void SaveNeuralMatrix(BinaryWriter writer, NeuralMatrix matrix)
+    {
+        writer.Write(matrix.Rows);
+        writer.Write(matrix.UsedColumns);
+
+        float* ptr = matrix.Pointer;
+        int stride = matrix.ColumnsStride;
+
+        for (int r = 0; r < matrix.Rows; r++)
+        {
+            float* rowPtr = ptr + r * stride;
+            for (int c = 0; c < matrix.UsedColumns; c++)
+            {
+                writer.Write(rowPtr[c]);
+            }
+        }
+    }
+
+    private static void LoadNeuralMatrix(BinaryReader reader, NeuralMatrix matrix)
+    {
+        int rows = reader.ReadInt32();
+        int cols = reader.ReadInt32();
+
+        if (rows != matrix.Rows || cols != matrix.UsedColumns)
+        {
+            throw new InvalidOperationException("NeuralMatrix shape mismatch during loading.");
+        }
+
+        float* ptr = matrix.Pointer;
+        int stride = matrix.ColumnsStride;
+
+        for (int r = 0; r < matrix.Rows; r++)
+        {
+            float* rowPtr = ptr + r * stride;
+            for (int c = 0; c < matrix.UsedColumns; c++)
+            {
+                rowPtr[c] = reader.ReadSingle();
+            }
+        }
+    }
+
+    #endregion
+
     public void Dispose()
     {
         ClearIntermediates();

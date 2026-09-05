@@ -11,17 +11,16 @@ namespace NeutralTest;
 
 internal class Program
 {
+    private const int BatchSize = 64;
     static void Main() => RunCnnNetwork();
 
     public static void RunCnnNetwork()
     {
-        var loader = DataLoaderFactory.Create(DataSourceType.Letters);
-
-        const int batchSize = 32;
-
+        var key = DataSourceType.Letters;
+        var loader = DataLoaderFactory.Create(key);
         var dataSet = loader.LoadCompleteDataset(
-           batchSize: batchSize,
-           maxTrainSamples: 30000,
+           batchSize: BatchSize,
+           maxTrainSamples: 60000,
            maxTestSamples: 3000
         );
 
@@ -73,7 +72,7 @@ internal class Program
         {
             LearningRate = 0.0003f,
             WeightDecay = 1e-4f,
-            BatchSize = batchSize,
+            BatchSize = BatchSize,
             Epochs = 100,
             DropoutRate = 0.25f,
             WithShuffle = true,
@@ -89,7 +88,7 @@ internal class Program
 
         var validator = new CnnValidator();
 
-        TrainAndRenderTable(network, validator, dataSet, loader.DatasetName, loader.NumClasses);
+        TrainAndRenderTable(network, validator, dataSet, key, loader.NumClasses);
 
         Console.WriteLine("\n=== FINAL EVALUATION ===");
         var finalResult = validator.Validate(network, dataSet.TestImages, dataSet.TestLabels);
@@ -102,18 +101,29 @@ internal class Program
     }
 
     private static void TrainAndRenderTable(
-        CnnNetwork<Architecture> network,
-        CnnValidator validator,
-        NeuralDataset dataSet,
-        string datasetName,
-        int numClasses)
+    CnnNetwork<Architecture> network,
+    CnnValidator validator,
+    NeuralDataset dataSet,
+    DataSourceType datasetKey, // Pass the dataset enum key here
+    int numClasses)
     {
         var learningRate = 0.0003f;
         var earlyStopPatience = 300;
         var targetAccuracy = 0.98f;
         var bestAccuracy = 0f;
-        var accuracy = 0f;
         var epochsSinceBest = 0;
+        const string CheckpointDir = "./checkpoints";
+
+        // Attempt to auto-load an existing checkpoint for this dataset if available
+        try
+        {
+            network.LoadWeights(datasetKey, CheckpointDir);
+            Console.WriteLine($"[INFO] Successfully loaded existing weights for {datasetKey}.");
+        }
+        catch (FileNotFoundException)
+        {
+            Console.WriteLine($"[INFO] No existing weights found for {datasetKey}. Starting fresh training.");
+        }
 
         var testImages = dataSet.TestImages;
         var testLabels = dataSet.TestLabels;
@@ -126,7 +136,7 @@ internal class Program
         {
             var totalLoss = 0f;
 
-            // Train Epoch
+            // Train Batch
             for (int batchIdx = 0; batchIdx < dataSet.TrainImages.Count; batchIdx++)
             {
                 float loss = network.TrainBatch(dataSet.TrainImages[batchIdx], dataSet.TrainLabels[batchIdx], learningRate);
@@ -134,9 +144,8 @@ internal class Program
             }
 
             var avgLoss = totalLoss / dataSet.TrainImages.Count;
-
             var result = validator.Validate(network, testImages, testLabels);
-            accuracy = result.Accuracy;
+            var accuracy = result.Accuracy;
 
             Console.Write("\e[H");
             Console.WriteLine($"╔══════════════╤{hBorderMid}╤══════════════╗\e[K");
@@ -179,12 +188,16 @@ internal class Program
 
             Console.WriteLine($"╚═══════╧{hBorderMid}╧══════════════╝\e[K");
             Console.WriteLine();
-            Console.WriteLine($"Best accuracy: {bestAccuracy:P2}  |  Epochs since best: {epochsSinceBest}\e[K");
+            Console.WriteLine($"Dataset: {datasetKey}  |  Best accuracy: {bestAccuracy:P2}  |  Epochs since best: {epochsSinceBest}\e[K");
 
+            // Save model weights whenever new peak accuracy is achieved
             if (accuracy > bestAccuracy)
             {
                 bestAccuracy = accuracy;
                 epochsSinceBest = 0;
+
+                // Produces files like: ./checkpoints/DataSourceType_MNIST.bin
+                network.SaveWeights(datasetKey, CheckpointDir);
             }
             else
             {
@@ -197,16 +210,22 @@ internal class Program
                 GC.WaitForPendingFinalizers();
             }
 
+            // Early stopping condition 1: Target accuracy met
             if (accuracy >= targetAccuracy)
             {
-                Console.WriteLine($"\n🎯 Target accuracy {targetAccuracy:P2} reached! Stopping early at epoch {epoch + 1}");
+                Console.WriteLine($"\n🎯 Target accuracy {targetAccuracy:P2} reached! Saving final {datasetKey} weights...");
+                network.SaveWeights(datasetKey, CheckpointDir);
                 break;
             }
 
+            // Early stopping condition 2: Loss/Accuracy plateaued
             if (epochsSinceBest >= earlyStopPatience && bestAccuracy > 0.4f)
             {
-                Console.WriteLine($"\n⏹️ No improvement for {earlyStopPatience} epochs. Stopping early at epoch {epoch + 1}");
-                Console.WriteLine($"Best accuracy: {bestAccuracy:P2}");
+                Console.WriteLine($"\n⏹️ No accuracy improvement for {earlyStopPatience} epochs. Stopping early at epoch {epoch + 1}");
+                Console.WriteLine($"Best accuracy for {datasetKey}: {bestAccuracy:P2}. Restoring best checkpoint...");
+
+                // Reload best checkpoint saved for this DataSourceType
+                network.LoadWeights(datasetKey, CheckpointDir);
                 break;
             }
         }

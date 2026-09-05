@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using NeutralNET.Framework.Connected;
 using NeutralNET.Framework.Convolutional;
 using NeutralNET.Matrices;
@@ -37,6 +39,46 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
     {
         return _framework.Forward(input);
     }
+
+    #region Save and Load Methods
+
+    /// <summary>
+    /// Saves weights to a binary stream using an enum key.
+    /// </summary>
+    public CnnNetwork<TArch> SaveWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    {
+        _framework.SaveWeights(key, stream);
+        return this;
+    }
+
+    /// <summary>
+    /// Saves weights to a directory path using an enum key.
+    /// </summary>
+    public CnnNetwork<TArch> SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        _framework.SaveWeights(key, directoryPath);
+        return this;
+    }
+
+    /// <summary>
+    /// Loads weights from a binary stream using an enum key.
+    /// </summary>
+    public CnnNetwork<TArch> LoadWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    {
+        _framework.LoadWeights(key, stream);
+        return this;
+    }
+
+    /// <summary>
+    /// Loads weights from a directory path using an enum key.
+    /// </summary>
+    public CnnNetwork<TArch> LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        _framework.LoadWeights(key, directoryPath);
+        return this;
+    }
+
+    #endregion
 
     public void Dispose()
     {

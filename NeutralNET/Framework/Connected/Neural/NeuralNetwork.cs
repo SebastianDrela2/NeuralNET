@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using NeutralNET.Framework.Connected;
 using NeutralNET.Matrices;
 
@@ -21,4 +23,26 @@ public class NeuralNetwork<TArch> where TArch : IArchitecture<TArch>
     public NeuralMatrix Forward() => _neuralFramework.Forward();
 
     public TArch Architecture => _neuralFramework.Architecture;
+
+    #region Save and Load Methods
+
+    /// <summary>
+    /// Saves weights to a directory path using an enum key.
+    /// </summary>
+    public NeuralNetwork<TArch> SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        _neuralFramework.SaveWeights(key, directoryPath);
+        return this;
+    }
+
+    /// <summary>
+    /// Loads weights from a directory path using an enum key.
+    /// </summary>
+    public NeuralNetwork<TArch> LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    {
+        _neuralFramework.LoadWeights(key, directoryPath);
+        return this;
+    }
+
+    #endregion
 }
