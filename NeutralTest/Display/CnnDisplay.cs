@@ -83,11 +83,16 @@ public class CnnDisplayWriter(char[] items, int dataSetSize)
         EpochsSinceBest += 1;
     }
 
+    private static class Chars
+    {
+        public const char Zero = ' ';
+        public const char Max = '\u2588';
+
+        public const char Good = '✓';
+        public const char Bad = '✗';
+    }
     private static string FmtPogression(float x, bool hl)
     {
-        const char ChZero = ' ';
-        const char ChMax = '\u2588';
-
         const string bg = "12;12;12";
         const string fg = "163;163;163";
         const string errBg = "227;61;48";
@@ -98,24 +103,36 @@ public class CnnDisplayWriter(char[] items, int dataSetSize)
         const string hlErrBg = "98;67;75";
         const string hlErrFg = "227;61;48";
 
-        switch (x)
+        const string bgBad = "35;11;0";
+        const string bgGood = "0;35;11";
+        const string fgBad = "163;53;0";
+        const string fgGood = "0;163;53";
+
+        switch (hl, x)
         {
-            case 0: return $"\e[48;2;{(hl ? hlBg : bg)}m{new string(ChZero, LabelColSize)}\e[49m";
-            case 1: return $"\e[38;2;{(hl ? hlFg : fg)}m{new string(ChMax, LabelColSize)}\e[39m";
-            case <= 0: return $"\e[38;2;{(hl ? hlErrBg : errBg)}m{x,5:f2}\e[39m";
-            case >= 1: return $"\e[38;2;{(hl ? hlErrFg : errFg)};48;2;{(hl ? hlErrBg : errBg)}m{x,5:f3}\e[39;49m";
-        }
+            case (true, 0): return $"\e[38;2;{fgBad}m{new string(Chars.Bad, LabelColSize)}\e[39m";
+            case (true, 1): return $"\e[38;2;0;53;163m{new string(Chars.Max, LabelColSize)}\e[39m";
+
+            case (false, 0): return $"\e[48;2;{bg}m{new string(Chars.Zero, LabelColSize)}\e[49m";
+            case (false, 1): return $"\e[38;2;{fg}m{new string(Chars.Max, LabelColSize)}\e[39m";
+
+            case (false, <= 0): return $"\e[38;2;{errBg}m{x,5:f2}\e[39m";
+            case (false, >= 1): return $"\e[38;2;{errFg};48;2;{errBg}m{x,5:f3}\e[39;49m";
+
+            case (true, <= 0): return $"\e[38;2;{hlErrBg}m{x,5:f2}\e[39m";
+            case (true, >= 1): return $"\e[38;2;{hlErrFg};48;2;{hlErrBg}m{x,5:f3}\e[39;49m";
+        }// ✓ ✗
         Span<char> xs = stackalloc char[LabelColSize];
-        xs.Fill(ChZero);
+        xs.Fill(Chars.Zero);
 
         var scaled = x * LabelColSize;
         var maxEnd = int.Clamp((int)scaled, 0, LabelColSize);
-        xs[..maxEnd].Fill(ChMax);
+        xs[..maxEnd].Fill(Chars.Max);
 
         if (maxEnd != LabelColSize)
         {
             int frame = int.Clamp((int)((8 * (scaled - maxEnd)) + 0.5f), 0, 7);
-            xs[maxEnd] = (char)(ChMax + (7 - frame));
+            xs[maxEnd] = (char)(Chars.Max + (7 - frame));
         }
 
         if (!hl) return $"\e[48;2;35;35;35;38;2;{fg}m{xs}\e[39;49m";
@@ -124,8 +141,9 @@ public class CnnDisplayWriter(char[] items, int dataSetSize)
         {
             case < 0.1f: return $"\e[48;2;35;11;0;38;2;163;53;0m{xs}\e[39;49m";
             case > 0.9f: return $"\e[48;2;0;35;11;38;2;0;163;53m{xs}\e[39;49m";
-            default: return $"\e[48;2;168;152;46;38;2;245;222;67m{xs}\e[39;49m";
         }
+
+        return $"\e[48;2;168;152;46;38;2;245;222;67m{xs}\e[39;49m";
     }
 
     private static int ArgMax(ReadOnlySpan<float> array)
@@ -233,12 +251,18 @@ public static class CnnDisplay
         const string hlErrBg = "98;67;75";
         const string hlErrFg = "227;61;48";
 
-        switch (x)
+        switch (hl, x)
         {
-            case 0: return $"\e[48;2;{(hl ? hlBg : bg)}m{new string(ChZero, ColWidth)}\e[49m";
-            case 1: return $"\e[38;2;{(hl ? hlFg : fg)}m{new string(ChMax, ColWidth)}\e[39m";
-            case <= 0: return $"\e[38;2;{(hl ? hlErrBg : errBg)}m{x,5:f2}\e[39m";
-            case >= 1: return $"\e[38;2;{(hl ? hlErrFg : errFg)};48;2;{(hl ? hlErrBg : errBg)}m{x,5:f3}\e[39;49m";
+            case (false, 0): return $"\e[48;2;{bg}m{new string(ChZero, ColWidth)}\e[49m";
+            case (true, 0): return $"\e[38;2;{hlBg}m{new string(ChZero, ColWidth)}\e[49m";
+
+            case (false, 1): return $"\e[38;2;{fg}m{new string(ChMax, ColWidth)}\e[39m";
+            case (false, <= 0): return $"\e[38;2;{errBg}m{x,5:f2}\e[39m";
+            case (false, >= 1): return $"\e[38;2;{errFg};48;2;{errBg}m{x,5:f3}\e[39;49m";
+
+            case (true, 1): return $"\e[38;2;{hlFg}m{new string(ChMax, ColWidth)}\e[39m";
+            case (true, <= 0): return $"\e[38;2;{hlErrBg}m{x,5:f2}\e[39m";
+            case (true, >= 1): return $"\e[38;2;{hlErrFg};48;2;{hlErrBg}m{x,5:f3}\e[39;49m";
         }
 
         Span<char> xs = stackalloc char[ColWidth];
