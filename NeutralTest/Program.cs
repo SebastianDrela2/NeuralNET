@@ -13,7 +13,7 @@ internal class Program
 {
     private const int BatchSize = 32;
 
-    static void Main() => RunDuniel();
+    static void Main() => RunCnnNetwork();
     public static void RunDuniel()
     {
         var loader = DataLoaderFactory.Create(DataSourceType.Letters);

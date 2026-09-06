@@ -36,12 +36,16 @@ public class CnnTrainer
         display.Clear();
         Span<float> results = new float[(1 + numClasses) * _config.BatchSize];
 
+        var indexes = Enumerable.Range(0, dataSet.TrainImages.Count).ToArray();
+
         while (true)
         {
+            Random.Shared.Shuffle(indexes);
             float totalLoss = 0;
             for (int batchIdx = 0; batchIdx < dataSet.TrainImages.Count; batchIdx++)
             {
-                float loss = _network.TrainBatch(dataSet.TrainImages[batchIdx], dataSet.TrainLabels[batchIdx], _config.LearningRate);
+                var index = indexes[batchIdx];
+                float loss = _network.TrainBatch(dataSet.TrainImages[index], dataSet.TrainLabels[index], _config.LearningRate);
                 totalLoss += loss;
             }
             display.TotalLoss = totalLoss;

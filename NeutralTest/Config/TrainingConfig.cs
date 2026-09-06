@@ -17,7 +17,7 @@ public class TrainingConfig
     public int BatchSize { get; set; } = 1024;
 
     public float LearningRate { get; set; } = 0.0005f;
-    public float TargetAccuracy { get; set; } = 0.99f;
+    public float TargetAccuracy { get; set; } = 1f;
     public int EarlyStopPatience { get; set; } = 50;
     public string CheckpointDir { get; set; } = "./checkpoints";
 
