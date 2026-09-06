@@ -31,4 +31,15 @@ partial class Extensions
             });
         }
     }
+
+    extension<T>(List<T> xs)
+        where T : IDisposable?
+    {
+        public void ClearAndDispose()
+        {
+            foreach (var x in xs) x?.Dispose();
+            xs.Clear();
+        }
+
+    }
 }

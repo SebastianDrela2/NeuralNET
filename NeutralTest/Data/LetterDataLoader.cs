@@ -25,10 +25,11 @@ public class LetterDataLoader : DataLoaderBase
         FontStyle.Italic,
         FontStyle.Bold | FontStyle.Italic
     ];
+    public const int LettersCount = 'Z' - 'A' + 1;
 
     public override int ImageScale => GraphicsUtils.Width;
     public override string DatasetName => "LetterData";
-    public override int NumClasses => 26;
+    public override int NumClasses => LettersCount; // 26 uppercase letters A-Z
 
     protected override (List<CnnMatrix> trainImages, List<NeuralMatrix> trainLabels,
                         List<CnnMatrix> testImages, List<NeuralMatrix> testLabels)

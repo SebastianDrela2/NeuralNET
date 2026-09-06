@@ -17,10 +17,8 @@ public class NeuralDataset
 
     public void Dispose()
     {
-        foreach (var img in TrainImages ?? Enumerable.Empty<CnnMatrix>()) img?.Dispose();
-        foreach (var lbl in TrainLabels ?? Enumerable.Empty<NeuralMatrix>()) lbl?.Dispose();
-        foreach (var img in TestImages ?? Enumerable.Empty<CnnMatrix>()) img?.Dispose();
-        foreach (var lbl in TestLabels ?? Enumerable.Empty<NeuralMatrix>()) lbl?.Dispose();
+        TrainLabels.ClearAndDispose();
+        TestImages.ClearAndDispose();
+        TestLabels.ClearAndDispose();
     }
 }
-
