@@ -11,13 +11,14 @@ public class TrainingConfig
     public DataSourceType DatasetKey { get; set; } = DataSourceType.Letters;
 
     // CRITICAL: Must be ~60,000 so the network gets ~2,300 images per letter instead of 76
-    public int MaxTrainSamples { get; set; } = 6_000;
-    public int MaxTestSamples { get; set; } = 1_000;
+    public int MaxTrainSamples { get; set; } = 5000;
+    public int MaxTestSamples { get; set; } = 1000;
 
     public int BatchSize { get; set; } = 1024;
 
     public float LearningRate { get; set; } = 0.0005f;
     public float TargetAccuracy { get; set; } = 1f;
+    public float TargetLoss { get; set; } = 0.0005f;
     public int EarlyStopPatience { get; set; } = 50;
     public string CheckpointDir { get; set; } = @"C:\Users\Sebastian\source\repos\NeutralNET\NeutralTest\bin\Release\net10.0\checkpoints";
 

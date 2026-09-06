@@ -79,8 +79,9 @@ public class CnnTrainer
                 Console.WriteLine($"Saved Weights!");
             }
 
-            if (display.Accuracy >= _config.TargetAccuracy)
+            if (display.Accuracy >= _config.TargetAccuracy && display.AvgLoss <= _config.TargetLoss)
             {
+                _network.SaveWeights(_config.DatasetKey, _config.CheckpointDir);
                 Console.WriteLine($"\n🎯 Target accuracy {_config.TargetAccuracy:P2} reached! Stopping early at epoch {display.Epoch}");
                 break;
             }
