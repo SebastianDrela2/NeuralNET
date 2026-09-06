@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using NeutralNET.Framework.Convolutional;
 using NeutralNET.Matrices;
@@ -13,18 +14,13 @@ public class LetterDataLoader : DataLoaderBase
 {
     private static readonly string[] FontFamilies =
     [
-        "Arial", "Times New Roman", "Georgia", "Verdana", "Tahoma",
-        "Consolas", "Courier New", "Comic Sans MS", "Impact", "Trebuchet MS",
-        "Palatino Linotype", "Segoe UI", "Lucida Console", "Garamond", "Century Gothic"
+        "Consolas", "Arial", "Times New Roman", "Georgia", "Verdana", "Tahoma",
+        //"Consolas", "Courier New", "Comic Sans MS", "Impact", "Trebuchet MS",
+        //"Palatino Linotype", "Segoe UI", "Lucida Console", "Garamond", "Century Gothic"
     ];
 
-    private static readonly FontStyle[] SupportedStyles =
-    [
-        FontStyle.Regular,
-        FontStyle.Bold,
-        FontStyle.Italic,
-        FontStyle.Bold | FontStyle.Italic
-    ];
+    private static FontStyle[] SupportedStyles => [FontStyle.Regular];
+
     public const int LettersCount = 'Z' - 'A' + 1;
 
     public override int ImageScale => GraphicsUtils.Width;
@@ -52,7 +48,6 @@ public class LetterDataLoader : DataLoaderBase
             int end = Math.Min(start + batchSize, numSamples);
             int currentBatchSize = end - start;
 
-            // FIX: Handle leftover samples instead of dropping them completely
             if (currentBatchSize <= 0) break;
 
             var imgMat = CnnMatrix.GetOrCreate(currentBatchSize, Channels, scale, scale, readOnly: true);
@@ -63,17 +58,7 @@ public class LetterDataLoader : DataLoaderBase
                 int idx = start + i;
                 float[] pixels = images[idx];
 
-                for (int c = 0; c < Channels; c++)
-                {
-                    int offset = c * scale * scale;
-                    for (int y = 0; y < scale; y++)
-                    {
-                        for (int x = 0; x < scale; x++)
-                        {
-                            imgMat[i, c, y, x] = pixels[offset + y * scale + x];
-                        }
-                    }
-                }
+                PopulateTensorFromPixels(pixels, imgMat, i, scale);
 
                 int label = labels[idx];
                 lblMat.Set(i, label, 1.0f);
@@ -84,14 +69,90 @@ public class LetterDataLoader : DataLoaderBase
         }
     }
 
+    /// <summary>
+    /// Unified shared helper method to populate a CnnMatrix slice from raw flat pixel data,
+    /// ensuring exact parity between training batch creation and Windows Forms UI generation.
+    /// </summary>
+    ///
+    private static void PopulateTensorFromPixels(PixelStructRGB pixels, CnnMatrix imgMat, int batchIndex, int scale)
+    {
+        for (int y = 0; y < scale; y++)
+        {
+            for (int x = 0; x < scale; x++)
+            {
+                for (int c = 0; c < Channels; c++)
+                {
+                    imgMat[batchIndex, c, y, x] = pixels.Pixels[y * scale + x][c];
+                }
+            }
+        }
+    }
+
+    private static void PopulateTensorFromPixels(float[] pixels, CnnMatrix imgMat, int batchIndex, int scale)
+    {
+        var i = 0;
+
+        for (int y = 0; y < scale; y++)
+        {
+            for (int x = 0; x < scale; x++)
+            {
+                for (int c = 0; c < Channels; c++, i++)
+                {
+                    imgMat[batchIndex, c, y, x] = pixels[i];
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Static helper method for Windows Forms to generate a single sample using the exact 
+    /// same generation pipeline as the training dataset, returning both the network tensor and UI bitmap.
+    /// </summary>
+    public static (CnnMatrix ImageTensor, Bitmap DisplayBitmap) GenerateSampleForUI(char targetChar)
+    {
+        var rng = Random.Shared;
+        string fontName = FontFamilies[rng.Next(FontFamilies.Length)];
+        FontStyle style = SupportedStyles[rng.Next(SupportedStyles.Length)];
+
+        var set = GraphicsUtils.GetLettersDataSetRGB(fontName, applyTransformation: true, style: style);
+
+        int targetLabelIndex = char.ToUpper(targetChar) - 'A';
+        var sample = set.FirstOrDefault(s => s.Label == targetLabelIndex);
+
+        if (sample.Flat == Span<float>.Empty || sample.Flat.Length == 0)
+        {
+            sample = set[0];
+        }
+
+        int scale = GraphicsUtils.Width;
+        var imgMat = CnnMatrix.GetOrCreate(1, Channels, scale, scale, readOnly: true);
+
+        PopulateTensorFromPixels(sample.Flat.ToArray(), imgMat, 0, scale);
+
+        Bitmap displayBmp = new Bitmap(scale, scale, PixelFormat.Format32bppArgb);
+        for (int y = 0; y < scale; y++)
+        {
+            for (int x = 0; x < scale; x++)
+            {
+                int r = (int)(imgMat[0, 0, y, x] * 0xFF);
+                int g = (int)(imgMat[0, 1, y, x] * 0xFF);
+                int b = (int)(imgMat[0, 2, y, x] * 0xFF);
+
+                displayBmp.SetPixel(x, y, Color.FromArgb(Clamp(r), Clamp(g), Clamp(b)));
+            }
+        }
+
+        return (imgMat, displayBmp);
+    }
+
+    private static int Clamp(int val) => Math.Max(0, Math.Min(255, val));
+
     private (List<CnnMatrix> images, List<NeuralMatrix> labels) LoadFlattenedDataSet(
         DataSetType dataSetType, int batchSize, int maxSamples)
     {
         bool isTrain = dataSetType == DataSetType.Train;
         var rng = Random.Shared;
 
-        // FIX: Cache raw un-transformed font definitions or base metadata templates
-        // rather than pre-rendered static images, ensuring high transformation diversity.
         var fontTemplates = new List<(string FontName, FontStyle Style)>();
 
         foreach (var fontName in FontFamilies)
@@ -110,17 +171,13 @@ public class LetterDataLoader : DataLoaderBase
 
         var allSamples = new List<PixelStructRGB>(maxSamples);
 
-        // FIX: Generate unique transformations on-the-fly inside the collection loop
         while (allSamples.Count < maxSamples)
         {
             var template = fontTemplates[rng.Next(fontTemplates.Count)];
-
-            // Re-rendering or pulling per-iteration ensures unique transformations per sample
             var set = GraphicsUtils.GetLettersDataSetRGB(template.FontName, applyTransformation: isTrain, style: template.Style);
 
             if (set != null && set.Length > 0)
             {
-                // Shuffle individual batches to keep variety high across classes
                 var shuffledSet = set.OrderBy(_ => rng.Next()).ToArray();
                 foreach (var sample in shuffledSet)
                 {
@@ -132,7 +189,6 @@ public class LetterDataLoader : DataLoaderBase
 
         var selectedData = allSamples.Take(maxSamples).ToArray();
 
-        // FIX: Shuffle an lightweight index array instead of moving heavy structs around
         int[] indices = Enumerable.Range(0, selectedData.Length).ToArray();
         rng.Shuffle(indices);
 

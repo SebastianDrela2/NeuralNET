@@ -11,8 +11,8 @@ public class TrainingConfig
     public DataSourceType DatasetKey { get; set; } = DataSourceType.Letters;
 
     // CRITICAL: Must be ~60,000 so the network gets ~2,300 images per letter instead of 76
-    public int MaxTrainSamples { get; set; } = 60_000;
-    public int MaxTestSamples { get; set; } = 10_000;
+    public int MaxTrainSamples { get; set; } = 6_000;
+    public int MaxTestSamples { get; set; } = 1_000;
 
     public int BatchSize { get; set; } = 1024;
 
@@ -44,7 +44,7 @@ public class TrainingConfig
                    }
                 ],
                 // Wide single hidden layer avoids information loss on 26 output classes
-                DenseArchitecture = [256, numClasses],
+                DenseArchitecture = [64, numClasses],
                 DenseHiddenActivation = ActivationType.LeakyReLU,
                 OutputActivation = ActivationType.Softmax,
                 OptimizerConfig = new CnnOptimizerConfig

@@ -1,15 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
-using System.Drawing.Text;
 using System.Windows.Forms;
 using NeutralNET.Framework.Connected;
-using NeutralNET.Framework.Convolutional;
 using NeutralNET.Framework.Neural.CNN;
 using NeutralNET.Matrices;
 using NeutralNET.Stuff;
+using NeutralNET.Test.Data; // Required for LetterDataLoader
 
 namespace NeutralNET.ImageEpochViewer;
 
@@ -17,21 +14,6 @@ public partial class LetterWindow : Form
 {
     private FlowLayoutPanel flowPanel;
     private System.Windows.Forms.Timer _timer;
-
-    private static readonly string[] FontFamilies =
-    [
-        "Arial", "Times New Roman", "Georgia", "Verdana", "Tahoma",
-        "Consolas", "Courier New", "Comic Sans MS", "Impact", "Trebuchet MS",
-        "Palatino Linotype", "Segoe UI", "Lucida Console", "Garamond", "Century Gothic"
-    ];
-
-    private static readonly FontStyle[] SupportedStyles =
-    [
-        FontStyle.Regular,
-        FontStyle.Bold,
-        FontStyle.Italic,
-        FontStyle.Bold | FontStyle.Italic
-    ];
 
     private readonly CnnNetwork<Architecture> _network;
     private readonly List<(PictureBox Pic, Label Lbl, char TargetChar)> _letterSlots = [];
@@ -79,10 +61,10 @@ public partial class LetterWindow : Form
 
             var pic = new PictureBox
             {
-                Width = 96,
-                Height = 96,
+                Width = GraphicsUtils.Width,
+                Height = GraphicsUtils.Height,
                 SizeMode = PictureBoxSizeMode.Zoom,
-                Location = new Point((itemPanel.Width - 96) / 2, 8),
+                Location = new Point((itemPanel.Width - GraphicsUtils.Width) / 2, 8),
                 BackColor = Color.Black,
                 BorderStyle = BorderStyle.FixedSingle
             };
@@ -127,49 +109,13 @@ public partial class LetterWindow : Form
         foreach (var slot in _letterSlots)
         {
             char targetChar = slot.TargetChar;
-            string randomFontName = FontFamilies[Random.Shared.Next(FontFamilies.Length)];
-            FontStyle randomStyle = SupportedStyles[Random.Shared.Next(SupportedStyles.Length)];
-
-            // 1. Generate the exact training-style pixel structure using GraphicsUtils
-            using var font = new Font(randomFontName, GraphicsUtils.FontSize * GraphicsUtils.UpScale, randomStyle);
-            var pixelStruct = GraphicsUtils.GenerateCharPixelStructRGB(targetChar, font, null);
-
-            // 2. Create UI Bitmap and CNN input tensor
-            Bitmap displayBmp = new Bitmap(GraphicsUtils.Width, GraphicsUtils.Height, PixelFormat.Format32bppArgb);
-
-            int channels = 3;
-            var inputMatrix = CnnMatrix.GetOrCreate(1, channels, GraphicsUtils.Height, GraphicsUtils.Width);
-            float* pInput = inputMatrix.Pointer;
-
-            int index = 0;
-            for (int y = 0; y < GraphicsUtils.Height; y++)
-            {
-                for (int x = 0; x < GraphicsUtils.Width; x++)
-                {
-                    var rgb = pixelStruct.Values[index];
-                    float r = rgb.R;
-                    float g = rgb.G;
-                    float b = rgb.B;
-
-                    // Set pixel for UI display bitmap (32x32 native size)
-                    displayBmp.SetPixel(x, y, Color.FromArgb((int)r, (int)g, (int)b));
-
-                    // Populate CNN input tensor matching DataLoader's raw scale (do NOT divide by 255 if loader doesn't)
-                    int spatialOffset = y * GraphicsUtils.Width + x;
-                    pInput[0 * GraphicsUtils.PixelCount + spatialOffset] = r;
-                    pInput[1 * GraphicsUtils.PixelCount + spatialOffset] = g;
-                    pInput[2 * GraphicsUtils.PixelCount + spatialOffset] = b;
-
-                    index++;
-                }
-            }
+            var (inputMatrix, displayBmp) = LetterDataLoader.GenerateSampleForUI(targetChar);
 
             slot.Pic.Image?.Dispose();
             slot.Pic.Image = displayBmp;
 
-            // 3. Perform CNN Inference
             using NeuralMatrix output = _network.Forward(inputMatrix);
-            inputMatrix.Dispose();
+            inputMatrix.Dispose(); 
 
             int predictedClassIndex = 0;
             float maxConfidence = float.MinValue;
@@ -191,7 +137,7 @@ public partial class LetterWindow : Form
                 ? GraphicsUtils.DefaultLetters[predictedClassIndex]
                 : '?';
 
-            // 4. Color-coded evaluation
+            // Color-coded evaluation
             if (predictedChar == targetChar && maxConfidence >= 0.7f)
             {
                 slot.Lbl.Text = $"[{targetChar}] Pred: {predictedChar}\n({maxConfidence * 100:F1}%)";

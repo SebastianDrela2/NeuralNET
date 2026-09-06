@@ -17,7 +17,7 @@ public unsafe class CnnMatrix : IDisposable
     private const int ByteAlignment = Alignment * sizeof(float);
 
     private static readonly ConcurrentBag<CnnMatrix> _pool = [];
-    private static readonly int CommonAllocatedLength = 33554432;
+    private static readonly int CommonAllocatedLength = 134217728;
 
     public float* Pointer;
     public int Batch;
