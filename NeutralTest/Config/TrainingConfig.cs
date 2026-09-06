@@ -32,16 +32,16 @@ public class TrainingConfig
             {
                 ConvLayers =
                 [
-                    // Layer 1: 28x28 -> 14x14 (32 filters)
-                    new() {
-                        KernelHeight = 3, KernelWidth = 3, Filters = 32, Stride = 1, Padding = 1,
-                        Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
-                    },
-                    // Layer 2: 14x14 -> 7x7 (64 filters)
-                    new() {
-                        KernelHeight = 3, KernelWidth = 3, Filters = 64, Stride = 1, Padding = 1,
-                        Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
-                    }
+                   // Layer 1: 32x32 -> 16x16 (32 filters)
+                   new() {
+                       KernelHeight = 3, KernelWidth = 3, Filters = 32, Stride = 1, Padding = 1,
+                       Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
+                   },
+                   // Layer 2: 16x16 -> 8x8 (64 filters)
+                   new() {
+                       KernelHeight = 3, KernelWidth = 3, Filters = 64, Stride = 1, Padding = 1,
+                       Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
+                   }
                 ],
                 // Wide single hidden layer avoids information loss on 26 output classes
                 DenseArchitecture = [256, numClasses],

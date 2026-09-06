@@ -26,7 +26,7 @@ public class LetterDataLoader : DataLoaderBase
         FontStyle.Bold | FontStyle.Italic
     ];
 
-    public override int ImageScale => 28;
+    public override int ImageScale => GraphicsUtils.Width;
     public override string DatasetName => "LetterData";
     public override int NumClasses => 26;
 
