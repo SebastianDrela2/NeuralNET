@@ -54,15 +54,15 @@ public static partial class GraphicsUtils
         var result = new PixelStructRGB[characters.Length];
         using var font = new Font(fontName, FontSize * UpScale, style);
 
-        for (var i = 0; i < characters.Length; ++i)
+        Parallel.For(0, characters.Length, i =>
         {
             Matrix? transformation;
 
             if (applyTransformation)
             {
-                var angle = float.Lerp(-5, 5, _rng.NextSingle());
-                var scaleX = float.Lerp(0.95f, 1.05f, _rng.NextSingle());
-                var scaleY = float.Lerp(0.95f, 1.05f, _rng.NextSingle());
+                var angle = float.Lerp(-5, 5, Random.Shared.NextSingle());
+                var scaleX = float.Lerp(0.95f, 1.05f, Random.Shared.NextSingle());
+                var scaleY = float.Lerp(0.95f, 1.05f, Random.Shared.NextSingle());
 
                 transformation = CreateTranformationMatrix(angle, scaleX, scaleY);
             }
@@ -73,7 +73,8 @@ public static partial class GraphicsUtils
 
             // Index 'i' (0-25) is used as the class label
             result[i] = GenerateCharPixelStructRGB(characters[i], font, i, transformation);
-        }
+            transformation?.Dispose();
+        });
 
         return result;
     }

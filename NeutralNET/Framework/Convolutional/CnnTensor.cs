@@ -17,7 +17,7 @@ public unsafe class CnnMatrix : IDisposable
     private const int ByteAlignment = Alignment * sizeof(float);
 
     private static readonly ConcurrentBag<CnnMatrix> _pool = [];
-    private static readonly int CommonAllocatedLength = 0x400000;
+    private static readonly int CommonAllocatedLength = 25690112;
 
     public float* Pointer;
     public int Batch;
@@ -127,62 +127,68 @@ public unsafe class CnnMatrix : IDisposable
         float* colPtr = colMatrix.Pointer;
         int colStride = colMatrix.ColumnsStride;
 
-        using var padded = GetOrCreate(Batch, Channels, paddedH, paddedW);
+        bool needsPadding = padding > 0;
+        using var padded = needsPadding ? GetOrCreate(Batch, Channels, paddedH, paddedW) : null;
+        if (needsPadding) padded.Clear();
 
-        // Fast zero-fill only if padding is required
-        if (padding > 0)
+        float* baseSrcPtr = Pointer;
+        float* basePaddedPtr = needsPadding ? padded!.Pointer : baseSrcPtr;
+        int srcStrideH = Width;
+        int targetPaddedW = needsPadding ? paddedW : Width;
+
+        if (needsPadding)
         {
-            padded.Clear();
-        }
-
-        nuint rowBytes = (nuint)Width * sizeof(float);
-
-        // Optimized Cache-Line Sequential Copy for Input Padding
-        for (int b = 0; b < Batch; b++)
-        {
-            for (int c = 0; c < Channels; c++)
+            nuint rowBytes = (nuint)Width * sizeof(float);
+            Parallel.For(0, Batch, b =>
             {
-                float* srcPtr = GetChannelPointer(b, c);
-                float* dstPtr = padded.GetChannelPointer(b, c);
+                long batchSrcOffset = b * Channels * Height * Width;
+                long batchPadOffset = b * Channels * paddedH * paddedW;
 
-                for (int y = 0; y < Height; y++)
+                for (int c = 0; c < Channels; c++)
                 {
-                    float* srcRow = srcPtr + y * Width;
-                    float* dstRow = dstPtr + (y + padding) * paddedW + padding;
-                    NativeMemory.Copy(srcRow, dstRow, rowBytes);
+                    float* srcPtr = baseSrcPtr + batchSrcOffset + c * Height * Width;
+                    float* dstPtr = basePaddedPtr + batchPadOffset + c * paddedH * paddedW;
+
+                    for (int y = 0; y < Height; y++)
+                    {
+                        float* srcRow = srcPtr + y * srcStrideH;
+                        float* dstRow = dstPtr + (y + padding) * targetPaddedW + padding;
+                        NativeMemory.Copy(srcRow, dstRow, rowBytes);
+                    }
                 }
-            }
+            });
         }
 
-        // Parallelized SIMD Block Extraction straight into Column Matrix Memory
-        for (int b = 0; b < Batch; b++)
+        int spatialPadStride = paddedH * targetPaddedW;
+
+        Parallel.For(0, Batch, b =>
         {
             int batchPatchBase = b * outH * outW;
+            long batchPadOffset = b * Channels * spatialPadStride;
+            long batchColOffset = (long)batchPatchBase * colStride;
+            float* batchColPtr = colPtr + batchColOffset;
 
             for (int oh = 0; oh < outH; oh++)
             {
                 int startY = oh * stride;
-                int patchRowBase = batchPatchBase + oh * outW;
+                int patchRowBase = oh * outW;
 
                 for (int ow = 0; ow < outW; ow++)
                 {
                     int startX = ow * stride;
-                    float* dstRow = colPtr + (patchRowBase + ow) * colStride;
+                    float* dstRow = batchColPtr + (patchRowBase + ow) * colStride;
                     int colIdx = 0;
 
                     for (int c = 0; c < Channels; c++)
                     {
-                        float* paddedPtr = padded.GetChannelPointer(b, c);
+                        float* channelPaddedPtr = basePaddedPtr + batchPadOffset + c * spatialPadStride;
 
                         for (int ky = 0; ky < kernelH; ky++)
                         {
-                            float* srcRow = paddedPtr + (startY + ky) * paddedW + startX;
+                            float* srcRow = channelPaddedPtr + (startY + ky) * targetPaddedW + startX;
 
-                            if (kernelW == 3 && Avx2.IsSupported)
+                            if (kernelW == 3)
                             {
-                                // Vectorized fast-path for standard 3x3 kernels
-                                Vector128<float> kVec = Sse.LoadLow(Vector128<float>.Zero, srcRow);
-                                kVec = Sse.LoadHigh(kVec, srcRow + 1); // load 3 floats
                                 dstRow[colIdx] = srcRow[0];
                                 dstRow[colIdx + 1] = srcRow[1];
                                 dstRow[colIdx + 2] = srcRow[2];
@@ -202,7 +208,7 @@ public unsafe class CnnMatrix : IDisposable
                     }
                 }
             }
-        }
+        });
 
         return colMatrix;
     }
@@ -220,12 +226,12 @@ public unsafe class CnnMatrix : IDisposable
         float* colPtr = colGradients.Pointer;
         int colStride = colGradients.ColumnsStride;
         float* gradPtr = paddedGrad.Pointer;
-
         int kernelSpatial = kernelH * kernelW;
 
-        for (int b = 0; b < Batch; b++)
+        Parallel.For(0, Batch, b =>
         {
             long batchOffsetGrad = b * paddedGrad.StrideN;
+            int batchPatchBase = b * outH * outW;
 
             for (int oh = 0; oh < outH; oh++)
             {
@@ -248,7 +254,7 @@ public unsafe class CnnMatrix : IDisposable
                             float* srcCol = colRow + channelOffsetCol + ky * kernelW;
 
                             int kx = 0;
-                            if (Avx512F.IsSupported)
+                            if (Vector512.IsHardwareAccelerated)
                             {
                                 var vScale512 = Vector512.Create(scale);
                                 int vecLimit = kernelW - (kernelW % 16);
@@ -256,21 +262,7 @@ public unsafe class CnnMatrix : IDisposable
                                 {
                                     var vDst = Vector512.Load(dstGrad + kx);
                                     var vSrc = Vector512.Load(srcCol + kx);
-                                    vDst = Avx512F.FusedMultiplyAdd(vSrc, vScale512, vDst);
-                                    vDst.Store(dstGrad + kx);
-                                }
-                            }
-                            else if (Avx2.IsSupported)
-                            {
-                                var vScale256 = Vector256.Create(scale);
-                                int vecLimit = kernelW - (kernelW % 8);
-                                for (; kx < vecLimit; kx += 8)
-                                {
-                                    var vDst = Vector256.Load(dstGrad + kx);
-                                    var vSrc = Vector256.Load(srcCol + kx);
-                                    vDst = Fma.IsSupported
-                                        ? Fma.MultiplyAdd(vSrc, vScale256, vDst)
-                                        : Avx.Add(vDst, Avx.Multiply(vSrc, vScale256));
+                                    vDst = Vector512.FusedMultiplyAdd(vSrc, vScale512, vDst);
                                     vDst.Store(dstGrad + kx);
                                 }
                             }
@@ -283,21 +275,30 @@ public unsafe class CnnMatrix : IDisposable
                     }
                 }
             }
-        }
+        });
 
         nuint rowBytes = (nuint)Width * sizeof(float);
-        for (int b = 0; b < Batch; b++)
+        float* baseDstPtr = Pointer;
+        float* basePaddedGradPtr = paddedGrad.Pointer;
+
+        Parallel.For(0, Batch, b =>
         {
+            long batchSrcOffset = b * paddedGrad.StrideN;
+            long batchDstOffset = (long)b * Channels * Height * Width;
+
             for (int c = 0; c < Channels; c++)
             {
+                float* srcChannel = basePaddedGradPtr + batchSrcOffset + c * paddedGrad.StrideC;
+                float* dstChannel = baseDstPtr + batchDstOffset + c * Height * Width;
+
                 for (int y = 0; y < Height; y++)
                 {
-                    float* srcPtr = paddedGrad.GetRowPointer(b, c, y + padding) + padding;
-                    float* dstPtr = GetRowPointer(b, c, y);
+                    float* srcPtr = srcChannel + (y + padding) * paddedW + padding;
+                    float* dstPtr = dstChannel + y * Width;
                     NativeMemory.Copy(srcPtr, dstPtr, rowBytes);
                 }
             }
-        }
+        });
     }
 
     public void Dispose()

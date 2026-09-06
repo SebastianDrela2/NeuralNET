@@ -51,7 +51,8 @@ public class LetterDataLoader : DataLoaderBase
             int end = Math.Min(start + batchSize, numSamples);
             int currentBatchSize = end - start;
 
-            if (currentBatchSize < batchSize) continue;
+            // FIX: Handle leftover samples instead of dropping them completely
+            if (currentBatchSize <= 0) break;
 
             var imgMat = CnnMatrix.GetOrCreate(currentBatchSize, Channels, scale, scale, readOnly: true);
             var lblMat = NeuralMatrix.GetOrCreate(currentBatchSize, NumClasses);
@@ -88,53 +89,68 @@ public class LetterDataLoader : DataLoaderBase
         bool isTrain = dataSetType == DataSetType.Train;
         var rng = Random.Shared;
 
-        // Step 1: Pre-render all font/style variations ONCE (Exact total GDI+ passes = 15 fonts * 4 styles = 60 passes)
-        var fontCache = new List<PixelStructRGB[]>();
+        // FIX: Cache raw un-transformed font definitions or base metadata templates
+        // rather than pre-rendered static images, ensuring high transformation diversity.
+        var fontTemplates = new List<(string FontName, FontStyle Style)>();
 
         foreach (var fontName in FontFamilies)
         {
             var stylesToRender = isTrain ? SupportedStyles : [FontStyle.Regular];
             foreach (var style in stylesToRender)
             {
-                try
+                fontTemplates.Add((fontName, style));
+            }
+        }
+
+        if (fontTemplates.Count == 0)
+        {
+            fontTemplates.Add(("Arial", FontStyle.Regular));
+        }
+
+        var allSamples = new List<PixelStructRGB>(maxSamples);
+
+        // FIX: Generate unique transformations on-the-fly inside the collection loop
+        while (allSamples.Count < maxSamples)
+        {
+            var template = fontTemplates[rng.Next(fontTemplates.Count)];
+
+            // Re-rendering or pulling per-iteration ensures unique transformations per sample
+            var set = GraphicsUtils.GetLettersDataSetRGB(template.FontName, applyTransformation: isTrain, style: template.Style);
+
+            if (set != null && set.Length > 0)
+            {
+                // Shuffle individual batches to keep variety high across classes
+                var shuffledSet = set.OrderBy(_ => rng.Next()).ToArray();
+                foreach (var sample in shuffledSet)
                 {
-                    // Render clean base glyphs without GDI transformations (we do transformations lightning-fast in RAM if needed)
-                    var set = GraphicsUtils.GetLettersDataSetRGB(fontName, applyTransformation: isTrain, style: style);
-                    fontCache.Add(set);
-                }
-                catch
-                {
-                    // Skip unsupported font/style combos safely
+                    allSamples.Add(sample);
+                    if (allSamples.Count >= maxSamples) break;
                 }
             }
         }
 
-        if (fontCache.Count == 0)
-        {
-            fontCache.Add(GraphicsUtils.GetLettersDataSetRGB("Arial", applyTransformation: isTrain, style: FontStyle.Regular));
-        }
-
-        // Step 2: Sample directly from memory array (Instantaneous in-memory operations)
-        var allSamples = new List<PixelStructRGB>(maxSamples);
-
-        while (allSamples.Count < maxSamples)
-        {
-            var randomSet = fontCache[rng.Next(fontCache.Count)];
-            allSamples.AddRange(randomSet);
-        }
-
         var selectedData = allSamples.Take(maxSamples).ToArray();
-        rng.Shuffle(selectedData);
 
-        var labelArray = selectedData.Select(x => x.Label).ToArray();
-        var imageArray = selectedData.Select(x => x.Flat.ToArray()).ToArray();
+        // FIX: Shuffle an lightweight index array instead of moving heavy structs around
+        int[] indices = Enumerable.Range(0, selectedData.Length).ToArray();
+        rng.Shuffle(indices);
+
+        var labelArray = new int[selectedData.Length];
+        var imageArray = new float[selectedData.Length][];
+
+        for (int i = 0; i < indices.Length; i++)
+        {
+            int originalIdx = indices[i];
+            labelArray[i] = selectedData[originalIdx].Label;
+            imageArray[i] = selectedData[originalIdx].Flat.ToArray();
+        }
 
         var batchImages = new List<CnnMatrix>();
         var batchLabels = new List<NeuralMatrix>();
 
         AddToBatches(imageArray, labelArray, batchSize, batchImages, batchLabels);
 
-        Console.WriteLine($"{DatasetName}: Loaded {selectedData.Length} {dataSetType} samples from {fontCache.Count} font/style variants.");
+        Console.WriteLine($"{DatasetName}: Loaded {selectedData.Length} {dataSetType} samples with randomized transform diversity.");
 
         return (batchImages, batchLabels);
     }

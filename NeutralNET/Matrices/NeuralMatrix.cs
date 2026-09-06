@@ -21,7 +21,7 @@ public unsafe class NeuralMatrix : IDisposable
     private const int ByteAlignment = Alignment * sizeof(float);
 
     private static readonly ConcurrentBag<NeuralMatrix> _pool = [];
-    private static readonly int CommonAllocatedLength = 6422528;
+    private static readonly int CommonAllocatedLength = 102760448;
 
     private readonly int _allocatedLength;
 
@@ -259,11 +259,11 @@ public unsafe class NeuralMatrix : IDisposable
         {
             try
             {
-                GpuMatrixOps.ComputeConvolutionGpu(
-                    Pointer, other.Pointer, result.Pointer,
-                    Rows, other.UsedColumns, UsedColumns,
-                    ColumnsStride, other.ColumnsStride, result.ColumnsStride);
-                return;
+                //GpuMatrixOps.ComputeConvolutionGpu(
+                //    Pointer, other.Pointer, result.Pointer,
+                //    Rows, other.UsedColumns, UsedColumns,
+                //    ColumnsStride, other.ColumnsStride, result.ColumnsStride);
+                //return;
             }
             catch (Exception ex)
             {
