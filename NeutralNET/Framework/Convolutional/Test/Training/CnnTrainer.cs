@@ -50,12 +50,10 @@ public class CnnTrainer
             }
             display.TotalLoss = totalLoss;
 
-            //var avgLoss = totalLoss / dataSet.TrainImages.Count;
             var result = _validator.Validate(_network, dataSet.TestImages, dataSet.TestLabels);
             display.Accuracy = result.Accuracy;
 
             int offset = 0;
-            // Render table using dedicated display class
             if (dataSet.TestImages.Count > 0)
             {
                 var sampleBatch = dataSet.TestImages[0];
@@ -74,11 +72,16 @@ public class CnnTrainer
 
             display.Update(results[..offset]);
 
-            // Early stopping rules
+
+            if (display.Accuracy == display.BestAccuracy)
+            {
+                _network.SaveWeights(_config.DatasetKey, _config.CheckpointDir);
+                Console.WriteLine($"Saved Weights!");
+            }
+
             if (display.Accuracy >= _config.TargetAccuracy)
             {
                 Console.WriteLine($"\n🎯 Target accuracy {_config.TargetAccuracy:P2} reached! Stopping early at epoch {display.Epoch}");
-                _network.SaveWeights(_config.DatasetKey, _config.CheckpointDir);
                 break;
             }
 

@@ -10,8 +10,8 @@ namespace NeutralNET.Stuff;
 
 public static partial class GraphicsUtils
 {
-    private const int FontSize = Height / 2;
-    private const int UpScale = 4;
+    public const int FontSize = Height / 2;
+    public const int UpScale = 4;
 
     private const int ScaleWidth = Width * UpScale;
     private const int ScaleHeight = Height * UpScale;
