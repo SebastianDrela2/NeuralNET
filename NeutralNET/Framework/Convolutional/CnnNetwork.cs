@@ -42,6 +42,11 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
 
     #region Save and Load Methods
 
+    public CnnMatrix GetConvLayerOutput(CnnMatrix input, int layerIndex)
+    {
+        return _framework.GetConvLayerOutput(input, layerIndex);
+    }
+
     /// <summary>
     /// Saves weights to a binary stream using an enum key.
     /// </summary>

@@ -6,7 +6,7 @@ using NeutralNET.Framework.Connected;
 using NeutralNET.Framework.Neural.CNN;
 using NeutralNET.Matrices;
 using NeutralNET.Stuff;
-using NeutralNET.Test.Data; // Required for LetterDataLoader
+using NeutralNET.Test.Data;
 
 namespace NeutralNET.ImageEpochViewer;
 
@@ -32,7 +32,7 @@ public partial class LetterWindow : Form
     {
         Width = 1040;
         Height = 720;
-        Text = "CNN Letter Recognition (All A-Z Grid)";
+        Text = "CNN Letter Recognition (All A-Z Grid - Click any letter to inspect Conv Layers)";
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(18, 18, 18);
 
@@ -56,7 +56,8 @@ public partial class LetterWindow : Form
                 Height = 175,
                 Margin = new Padding(6),
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(28, 28, 30)
+                BackColor = Color.FromArgb(28, 28, 30, 30),
+                Cursor = Cursors.Hand
             };
 
             var pic = new PictureBox
@@ -66,7 +67,8 @@ public partial class LetterWindow : Form
                 SizeMode = PictureBoxSizeMode.Zoom,
                 Location = new Point((itemPanel.Width - GraphicsUtils.Width) / 2, 8),
                 BackColor = Color.Black,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
+                Cursor = Cursors.Hand
             };
 
             var lbl = new Label
@@ -76,8 +78,15 @@ public partial class LetterWindow : Form
                 TextAlign = ContentAlignment.MiddleCenter,
                 Location = new Point(5, 110),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.White
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand
             };
+
+            // Wire up click events so clicking the card, picture, or label triggers feature map preview
+            EventHandler clickHandler = (s, e) => ShowFeatureMaps(targetChar);
+            itemPanel.Click += clickHandler;
+            pic.Click += clickHandler;
+            lbl.Click += clickHandler;
 
             itemPanel.Controls.Add(pic);
             itemPanel.Controls.Add(lbl);
@@ -115,7 +124,7 @@ public partial class LetterWindow : Form
             slot.Pic.Image = displayBmp;
 
             using NeuralMatrix output = _network.Forward(inputMatrix);
-            inputMatrix.Dispose(); 
+            inputMatrix.Dispose();
 
             int predictedClassIndex = 0;
             float maxConfidence = float.MinValue;
@@ -137,7 +146,6 @@ public partial class LetterWindow : Form
                 ? GraphicsUtils.DefaultLetters[predictedClassIndex]
                 : '?';
 
-            // Color-coded evaluation
             if (predictedChar == targetChar && maxConfidence >= 0.7f)
             {
                 slot.Lbl.Text = $"[{targetChar}] Pred: {predictedChar}\n({maxConfidence * 100:F1}%)";
@@ -153,6 +161,93 @@ public partial class LetterWindow : Form
                 slot.Lbl.Text = $"[{targetChar}] Pred: {predictedChar}\n({maxConfidence * 100:F1}%)";
                 slot.Lbl.ForeColor = Color.Gold;
             }
+        }
+    }
+
+    private void ShowFeatureMaps(char targetChar)
+    {
+        var (inputMatrix, _) = LetterDataLoader.GenerateSampleForUI(targetChar);
+
+        try
+        {
+            using var convOutput = _network.GetConvLayerOutput(inputMatrix, layerIndex: 9);
+
+            int numFilters = convOutput.Channels;
+            int mapHeight = convOutput.Height;
+            int mapWidth = convOutput.Width;
+
+            Form mapForm = new Form
+            {
+                Width = 720,
+                Height = 540,
+                Text = $"Convolutional Layer 1 Feature Maps for '{targetChar}'",
+                StartPosition = FormStartPosition.CenterParent,
+                BackColor = Color.FromArgb(18, 18, 18)
+            };
+
+            FlowLayoutPanel mapPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(10),
+                BackColor = Color.FromArgb(18, 18, 18)
+            };
+            mapForm.Controls.Add(mapPanel);
+
+            for (int f = 0; f < numFilters; f++)
+            {
+                Bitmap mapBmp = new Bitmap(mapWidth, mapHeight, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                float min = float.MaxValue, max = float.MinValue;
+                for (int y = 0; y < mapHeight; y++)
+                {
+                    for (int x = 0; x < mapWidth; x++)
+                    {
+                        float val = convOutput[0, f, y, x];
+                        if (val < min) min = val;
+                        if (val > max) max = val;
+                    }
+                }
+
+                float range = max - min;
+                if (range == 0) range = 1f;
+
+                for (int y = 0; y < mapHeight; y++)
+                {
+                    for (int x = 0; x < mapWidth; x++)
+                    {
+                        float val = convOutput[0, f, y, x];
+                        int normalized = (int)(((val - min) / range) * 255f);
+                        normalized = Math.Max(0, Math.Min(255, normalized));
+
+                        mapBmp.SetPixel(x, y, Color.FromArgb(normalized, normalized, normalized));
+                    }
+                }
+
+                PictureBox pic = new PictureBox
+                {
+                    Width = 80,
+                    Height = 80,
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    Image = mapBmp,
+                    BackColor = Color.Black,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Margin = new Padding(4)
+                };
+                mapPanel.Controls.Add(pic);
+            }
+
+            mapForm.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not retrieve convolutional layer activations: {ex.Message}",
+                "Feature Map Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            inputMatrix.Dispose();
         }
     }
 }

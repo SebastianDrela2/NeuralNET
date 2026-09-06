@@ -182,6 +182,45 @@ public sealed unsafe class CnnNeuralFramework<TArch> : IDisposable
             _denseOptimizers.Add(opt);
         }
     }
+    public CnnMatrix GetConvLayerOutput(CnnMatrix input, int layerIndex)
+    {
+        CnnMatrix current = input;
+        bool isExternal = true;
+
+        for (int i = 0; i <= layerIndex && i < _cnnConfig.ConvLayers.Count; i++)
+        {
+            var layer = _cnnConfig.ConvLayers[i];
+            var (convPreAct, colInput, weightMat) = ConvForward(current, i);
+
+            colInput.Dispose();
+            weightMat.Dispose();
+
+            if (!isExternal)
+            {
+                current.Dispose();
+            }
+
+            var pAct = convPreAct.Pointer;
+            var totalElements = convPreAct.Batch * convPreAct.Channels * convPreAct.Height * convPreAct.Width;
+            ApplyActivationVectorized(pAct, totalElements, layer.Activation);
+
+            CnnMatrix next;
+            if (layer.UseMaxPool)
+            {
+                next = MaxPoolForwardInPlace(convPreAct, layer.PoolSize);
+                convPreAct.Dispose();
+            }
+            else
+            {
+                next = convPreAct;
+            }
+
+            current = next;
+            isExternal = false;
+        }
+
+        return current;
+    }
 
     public void SaveWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
     {

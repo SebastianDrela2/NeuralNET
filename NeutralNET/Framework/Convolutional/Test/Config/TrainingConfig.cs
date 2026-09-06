@@ -33,14 +33,19 @@ public class TrainingConfig
             {
                 ConvLayers =
                 [
-                   // Layer 1: 32x32 -> 16x16 (32 filters)
+                   // Layer 1: 64x64 -> 32x32 (8 filters)
                    new() {
-                       KernelHeight = 3, KernelWidth = 3, Filters = 32, Stride = 1, Padding = 1,
+                       KernelHeight = 3, KernelWidth = 3, Filters = 8, Stride = 1, Padding = 1,
                        Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
                    },
-                   // Layer 2: 16x16 -> 8x8 (64 filters)
+                   // Layer 2: 32x32 -> 16x16 (16 filters)
                    new() {
-                       KernelHeight = 3, KernelWidth = 3, Filters = 64, Stride = 1, Padding = 1,
+                       KernelHeight = 3, KernelWidth = 3, Filters = 16, Stride = 1, Padding = 1,
+                       Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
+                   },
+                   // Layer 2: 16x16 -> 8x8 (32 filters)
+                    new() {
+                       KernelHeight = 3, KernelWidth = 3, Filters = 32, Stride = 1, Padding = 1,
                        Activation = ActivationType.LeakyReLU, UseMaxPool = true, PoolSize = 2
                    }
                 ],
