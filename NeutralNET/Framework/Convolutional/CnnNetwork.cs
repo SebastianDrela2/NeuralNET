@@ -77,10 +77,9 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
     /// <summary>
     /// Loads weights from a directory path using an enum key.
     /// </summary>
-    public CnnNetwork<TArch> LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    public bool LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
     {
-        _framework.LoadWeights(key, directoryPath);
-        return this;
+        return _framework.LoadWeights(key, directoryPath);
     }
 
     #endregion

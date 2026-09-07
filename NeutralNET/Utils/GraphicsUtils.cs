@@ -104,7 +104,7 @@ public static partial class GraphicsUtils
             g.Clear(Color.Black);
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
             g.Transform = transformation;
-            g.DrawString(str, font, Brushes.White, pos);
+            g.DrawString(str, font, new SolidBrush(Color.FromArgb(Random.Shared.Next(128, 256), Random.Shared.Next(128, 256), Random.Shared.Next(128, 256))), pos);
             g.Flush();
         }
 
@@ -113,6 +113,7 @@ public static partial class GraphicsUtils
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.SmoothingMode = SmoothingMode.HighQuality;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            g.CompositingQuality = CompositingQuality.HighQuality;
 
             g.DrawImage(
                 bitMap,
@@ -146,7 +147,7 @@ public static partial class GraphicsUtils
                     byte g = buffer[pixelOffset + 1];
                     byte r = buffer[pixelOffset + 2];
 
-                    pixels.Values[index] = (r, g, b);
+                    pixels.Values[index] = (r/255.0f, g/255.0f, b/255.0f);
                 }
             }
         }

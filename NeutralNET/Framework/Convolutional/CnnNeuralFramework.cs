@@ -284,16 +284,19 @@ public sealed unsafe class CnnNeuralFramework<TArch> : IDisposable
         }
     }
 
-    public void LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    public bool LoadWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
     {
         var filePath = Path.Combine(directoryPath, $"{typeof(TEnum).Name}_{key}.bin");
+
         if (!File.Exists(filePath))
         {
-            throw new FileNotFoundException($"Checkpoint file not found for key '{key}' at path: {filePath}");
+            return false;
         }
 
         using var stream = File.OpenRead(filePath);
         LoadWeights(key, stream);
+
+        return true;
     }
 
     private static void SaveCnnMatrix(BinaryWriter writer, CnnMatrix matrix)

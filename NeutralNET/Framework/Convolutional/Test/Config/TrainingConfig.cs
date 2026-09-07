@@ -18,8 +18,8 @@ public class TrainingConfig
 
     public float LearningRate { get; set; } = 0.0005f;
     public float TargetAccuracy { get; set; } = 1f;
-    public float TargetLoss { get; set; } = 0.0005f;
-    public int EarlyStopPatience { get; set; } = 50;
+    public float TargetLoss { get; set; } = 0.0001f;
+    public int EarlyStopPatience { get; set; } = 300;
     public string CheckpointDir { get; set; } = @"C:\Users\Sebastian\source\repos\NeutralNET\NeutralTest\bin\Release\net10.0\checkpoints";
 
     public CnnArchitectureConfig CnnArchitecture { get; set; } = new();

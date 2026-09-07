@@ -20,12 +20,13 @@ public class CnnTrainer
 
     public void Train(NeuralDataset dataSet, int numClasses)
     {
-        try
+        var isSaved = _network.LoadWeights(_config.DatasetKey, _config.CheckpointDir);
+
+        if (isSaved)
         {
-            _network.LoadWeights(_config.DatasetKey, _config.CheckpointDir);
             Console.WriteLine($"[INFO] Successfully loaded existing weights for {_config.DatasetKey}.");
         }
-        catch (FileNotFoundException)
+        else
         {
             Console.WriteLine($"[INFO] No existing weights found for {_config.DatasetKey}. Starting fresh training.");
         }

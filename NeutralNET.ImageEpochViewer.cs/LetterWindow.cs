@@ -68,7 +68,7 @@ public partial class LetterWindow : Form
                 Location = new Point((itemPanel.Width - GraphicsUtils.Width) / 2, 8),
                 BackColor = Color.Black,
                 BorderStyle = BorderStyle.FixedSingle,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
             };
 
             var lbl = new Label
@@ -170,7 +170,7 @@ public partial class LetterWindow : Form
 
         try
         {
-            using var convOutput = _network.GetConvLayerOutput(inputMatrix, layerIndex: 9);
+            using var convOutput = _network.GetConvLayerOutput(inputMatrix, layerIndex: 0);
 
             int numFilters = convOutput.Channels;
             int mapHeight = convOutput.Height;
