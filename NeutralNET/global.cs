@@ -10,6 +10,24 @@ using System.Diagnostics.CodeAnalysis;
 public static partial class GlobalScope
 {
     public const MethodImplOptions Inline = MethodImplOptions.AggressiveInlining;
+
+
+    [return: NotNullIfNotNull(nameof(target))]
+    public static ref T DisposeReplace<T>([NotNullIfNotNull(nameof(value))] ref T target, T value)
+    where T : IDisposable?, allows ref struct
+    {
+        Exchange(ref target, value)?.Dispose();
+        return ref target;
+    }
+
+    [return: NotNullIfNotNull(nameof(target))]
+    public static T Exchange<T>([NotNullIfNotNull(nameof(value))] scoped ref T target, T value)
+    where T : allows ref struct
+    {
+        var prev = target;
+        target = value;
+        return prev;
+    }
 }
 
 public static partial class Extensions;

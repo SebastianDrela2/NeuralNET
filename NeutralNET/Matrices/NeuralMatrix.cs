@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using NeutralNET.GPU;
+using NeutralNET.Framework.Convolutional;
 using NeutralNET.Stuff;
 using NeutralNET.Unmanaged;
 using NeutralNET.Utils;
@@ -15,8 +16,14 @@ namespace NeutralNET.Matrices;
 /// <summary>
 /// High‑performance matrix with SIMD AVX-512/AVX2 acceleration and pooled unsafe buffers.
 /// </summary>
-public unsafe class NeuralMatrix : IDisposable
+public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
 {
+    ~NeuralMatrix()
+    {
+        Console.WriteLine(Location);
+        NativeMemory.AlignedFree(Pointer);
+    }
+
     public const int Alignment = 16;
     private const int ByteAlignment = Alignment * sizeof(float);
 
@@ -33,25 +40,26 @@ public unsafe class NeuralMatrix : IDisposable
     public uint[] StrideMasks;
     public int UnsafeSize;
 
+    private SourceLocation Location;
     private bool _inUse = true;
 
     public Span<float> SpanWithGarbage => new(Pointer, UnsafeSize);
 
-    public static NeuralMatrix GetOrCreate(int rows, int columns)
+    public static NeuralMatrix GetOrCreate(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
         if (!_pool.TryTake(out var item))
         {
-            item = new NeuralMatrix(rows, columns);
+            item = new NeuralMatrix(rows, columns, ln, fp);
         }
         else
         {
-            item.Resize(rows, columns);
+            item.Resize(rows, columns, ln, fp);
         }
 
         return item;
     }
 
-    private NeuralMatrix(int rows, int columns)
+    private NeuralMatrix(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
         ColumnsStride = MatrixUtils.GetStride(columns);
         Rows = rows;
@@ -60,7 +68,7 @@ public unsafe class NeuralMatrix : IDisposable
         LogicalLength = Rows * UsedColumns;
         _allocatedLength = CommonAllocatedLength;
         UnsafeSize = Rows * ColumnsStride;
-
+        Location = SourceLocation.Current(ln, fp);
         if (UnsafeSize > CommonAllocatedLength)
         {
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
@@ -73,11 +81,18 @@ public unsafe class NeuralMatrix : IDisposable
 
     public void Dispose()
     {
+        if (!_inUse)
+        {
+            throw new NotImplementedException();
+        }
+
         _inUse = false;
         _pool.Add(this);
     }
 
-    public void Resize(int rows, int columns)
+
+
+    private void Resize(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
         ColumnsStride = MatrixUtils.GetStride(columns);
         Rows = rows;
@@ -91,6 +106,7 @@ public unsafe class NeuralMatrix : IDisposable
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
         }
 
+        Location = SourceLocation.Current(ln, fp);
         _inUse = true;
         StrideMasks = MatrixUtils.GetStrideMask(columns);
         Clear();
