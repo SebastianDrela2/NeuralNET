@@ -42,8 +42,19 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
 
     private SourceLocation Location;
     private bool _inUse = true;
+    private bool _isPoolable = true;
 
     public Span<float> SpanWithGarbage => new(Pointer, UnsafeSize);
+
+    public static NeuralMatrix Create(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
+    {
+        var matrix = new NeuralMatrix(rows, columns, ln, fp)
+        {
+            _isPoolable = false
+        };
+
+        return matrix;
+    }
 
     public static NeuralMatrix GetOrCreate(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
@@ -78,19 +89,6 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
         StrideMasks = MatrixUtils.GetStrideMask(columns);
         Clear();
     }
-
-    public void Dispose()
-    {
-        if (!_inUse)
-        {
-            throw new NotImplementedException();
-        }
-
-        _inUse = false;
-        _pool.Add(this);
-    }
-
-
 
     private void Resize(int rows, int columns, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
@@ -411,4 +409,26 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
         }
         Console.WriteLine("]\n\n");
     }
+
+    public void Dispose()
+    {
+        if (!_inUse)
+        {
+            throw new NotImplementedException();
+        }
+
+        if (_isPoolable)
+        {
+            _pool.Add(this);
+        }
+        else
+        {
+            NativeMemory.AlignedFree(Pointer);
+            GC.SuppressFinalize(this);
+            Pointer = null;
+        }
+
+        _inUse = false;
+    }
+
 }

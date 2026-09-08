@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
-using NeutralNET.Framework.Connected;
 using NeutralNET.Framework.Neural.CNN;
 using NeutralNET.Matrices;
 using NeutralNET.Stuff;

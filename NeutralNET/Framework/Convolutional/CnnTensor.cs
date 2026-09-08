@@ -49,6 +49,18 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
     private bool _inUse = true;
     private bool _isInit = false;
 
+    private bool _isPoolable = true;
+
+    public static CnnMatrix Create(int batch, int channels, int height, int width, bool readOnly = false, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
+    {
+        var matrix = new CnnMatrix(batch, channels, height, width, ln, fp, readOnly: readOnly)
+        {
+            _isPoolable = false
+        };
+
+        return matrix;
+    }
+
     public static CnnMatrix GetOrCreate(int batch, int channels, int height, int width, bool readOnly = false, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
     {
         if (!_pool.TryTake(out var item))
@@ -353,6 +365,18 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
         paddedGrad.Dispose();
     }
 
+    public static void ClearPool()
+    {
+        while (_pool.TryTake(out var item))
+        {
+            if (item.Pointer != null)
+            {
+                NativeMemory.AlignedFree(item.Pointer);
+                item.Pointer = null;
+            }
+        }
+    }
+
     private bool _isDisposing = false;
     [OverloadResolutionPriority(1)]
     public void Dispose([CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
@@ -369,10 +393,21 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
 
             DisposeLocations.Add(SourceLocation.Current(ln, fp));
             _inUse = false;
-            _pool.Add(this);
+
+            if (_isPoolable)
+            {
+                _pool.Add(this);
+            }
+            else
+            {
+                NativeMemory.AlignedFree(Pointer);
+                GC.SuppressFinalize(this);
+                Pointer = null;
+            }
+
             _isDisposing = false;
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             Console.WriteLine($"BORKED: {ex.Message}");
             throw;
@@ -389,15 +424,4 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
 
     public void Dispose() => Dispose(-1);
 
-    public static void ClearPool()
-    {
-        while (_pool.TryTake(out var item))
-        {
-            if (item.Pointer != null)
-            {
-                NativeMemory.AlignedFree(item.Pointer);
-                item.Pointer = null;
-            }
-        }
-    }
 }
