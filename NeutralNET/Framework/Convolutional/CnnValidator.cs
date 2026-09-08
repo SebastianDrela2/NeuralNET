@@ -6,7 +6,7 @@ namespace NeutralNET.Framework.Neural.CNN;
 
 public class CnnValidator
 {
-    public ValidationResult Validate(CnnNetwork<Architecture> network, List<CnnMatrix> images, List<NeuralMatrix> labels, int maxSamplesToShow = int.MaxValue)
+    public ValidationResult Validate(CnnNetwork network, List<CnnMatrix> images, List<NeuralMatrix> labels, int maxSamplesToShow = int.MaxValue)
     {
         int correct = 0;
         int total = 0;

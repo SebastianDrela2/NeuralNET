@@ -15,10 +15,10 @@ public partial class LetterWindow : Form
     private FlowLayoutPanel flowPanel;
     private System.Windows.Forms.Timer _timer;
 
-    private readonly CnnNetwork<Architecture> _network;
+    private readonly CnnNetwork _network;
     private readonly List<(PictureBox Pic, Label Lbl, char TargetChar)> _letterSlots = [];
 
-    public LetterWindow(CnnNetwork<Architecture> network)
+    public LetterWindow(CnnNetwork network)
     {
         _network = network;
         InitializeComponent();

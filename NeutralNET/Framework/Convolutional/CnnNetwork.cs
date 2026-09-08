@@ -6,22 +6,22 @@ using NeutralNET.Matrices;
 
 namespace NeutralNET.Framework.Neural.CNN;
 
-public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
+public class CnnNetwork
 {
-    private readonly CnnNeuralFramework<TArch> _framework;
+    private readonly CnnNeuralFramework _framework;
 
-    public CnnNetwork(CnnNeuralFramework<TArch> framework)
+    public CnnNetwork(CnnNeuralFramework framework)
     {
         _framework = framework;
     }
 
-    public CnnNetwork<TArch> Train(CnnMatrix input, NeuralMatrix target, float learningRate)
+    public CnnNetwork Train(CnnMatrix input, NeuralMatrix target, float learningRate)
     {
         _framework.Train(input, target, learningRate);
         return this;
     }
 
-    public CnnNetwork<TArch> TrainEpoch(List<CnnMatrix> inputs, List<NeuralMatrix> targets, float learningRate)
+    public CnnNetwork TrainEpoch(List<CnnMatrix> inputs, List<NeuralMatrix> targets, float learningRate)
     {
         for (int i = 0; i < inputs.Count; i++)
         {
@@ -50,7 +50,7 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
     /// <summary>
     /// Saves weights to a binary stream using an enum key.
     /// </summary>
-    public CnnNetwork<TArch> SaveWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    public CnnNetwork SaveWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
     {
         _framework.SaveWeights(key, stream);
         return this;
@@ -59,7 +59,7 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
     /// <summary>
     /// Saves weights to a directory path using an enum key.
     /// </summary>
-    public CnnNetwork<TArch> SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
+    public CnnNetwork SaveWeights<TEnum>(TEnum key, string directoryPath) where TEnum : struct, Enum
     {
         _framework.SaveWeights(key, directoryPath);
         return this;
@@ -68,7 +68,7 @@ public class CnnNetwork<TArch> : IDisposable where TArch : IArchitecture<TArch>
     /// <summary>
     /// Loads weights from a binary stream using an enum key.
     /// </summary>
-    public CnnNetwork<TArch> LoadWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
+    public CnnNetwork LoadWeights<TEnum>(TEnum key, Stream stream) where TEnum : struct, Enum
     {
         _framework.LoadWeights(key, stream);
         return this;

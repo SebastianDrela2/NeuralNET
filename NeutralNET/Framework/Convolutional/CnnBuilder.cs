@@ -3,7 +3,7 @@ using NeutralNET.Framework.Connected.Neural;
 
 namespace NeutralNET.Framework.Neural.CNN;
 
-public class CnnBuilder<TArch> where TArch : IArchitecture<TArch>
+public class CnnBuilder 
 {
     private NeuralNetworkConfig _denseConfig;
     private CnnArchitectureConfig _cnnConfig;
@@ -11,19 +11,19 @@ public class CnnBuilder<TArch> where TArch : IArchitecture<TArch>
     private int _inputWidth;
     private int _inputChannels ;
 
-    public CnnBuilder<TArch> WithDenseConfig(NeuralNetworkConfig config)
+    public CnnBuilder WithDenseConfig(NeuralNetworkConfig config)
     {
         _denseConfig = config;
         return this;
     }
 
-    public CnnBuilder<TArch> WithCnnConfig(CnnArchitectureConfig config)
+    public CnnBuilder WithCnnConfig(CnnArchitectureConfig config)
     {
         _cnnConfig = config;
         return this;
     }
 
-    public CnnBuilder<TArch> WithInputSize(int height, int width, int channels = 3)
+    public CnnBuilder WithInputSize(int height, int width, int channels = 3)
     {
         _inputHeight = height;
         _inputWidth = width;
@@ -31,14 +31,14 @@ public class CnnBuilder<TArch> where TArch : IArchitecture<TArch>
         return this;
     }
 
-    public CnnNetwork<TArch> Build()
+    public CnnNetwork Build()
     {
         if (_denseConfig == null)
             throw new InvalidOperationException("DenseConfig must be set before building.");
         if (_cnnConfig == null)
             throw new InvalidOperationException("CnnConfig must be set before building.");
 
-        var framework = new CnnNeuralFramework<TArch>(
+        var framework = new CnnNeuralFramework(
             _denseConfig,
             _cnnConfig,
             _inputHeight,
@@ -46,6 +46,6 @@ public class CnnBuilder<TArch> where TArch : IArchitecture<TArch>
             _inputChannels
         );
 
-        return new CnnNetwork<TArch>(framework);
+        return new CnnNetwork(framework);
     }
 }

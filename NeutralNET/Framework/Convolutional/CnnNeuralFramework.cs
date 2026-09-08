@@ -19,8 +19,7 @@ namespace NeutralNET.Framework.Neural.CNN;
 /// Zero‑GC CNN framework with full object and buffer pooling, pluggable optimizers,
 /// and low-latency P/Invoke CUDA/cuBLAS GPU matrix acceleration.
 /// </summary>
-public sealed unsafe class CnnNeuralFramework<TArch> : IDisposable
-    where TArch : IArchitecture<TArch>
+public sealed unsafe class CnnNeuralFramework
 {
     private const int Avx256Size = 8;
     private const int Avx512Size = 16;

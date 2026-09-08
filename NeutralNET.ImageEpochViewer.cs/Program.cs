@@ -17,7 +17,7 @@ internal static class Program
         var config = TrainingConfig.CreateDefault(loader.NumClasses);
         config.DatasetKey = datasetKey;
 
-        using var network = new CnnBuilder<Architecture>()
+        var network = new CnnBuilder()
             .WithCnnConfig(config.CnnArchitecture)
             .WithDenseConfig(config.DenseConfig)
             .WithInputSize(loader.ImageScale, loader.ImageScale, 3)

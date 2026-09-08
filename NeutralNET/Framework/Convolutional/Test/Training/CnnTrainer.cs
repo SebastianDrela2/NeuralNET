@@ -7,11 +7,11 @@ namespace NeutralTest;
 
 public class CnnTrainer
 {
-    private readonly CnnNetwork<Architecture> _network;
+    private readonly CnnNetwork _network;
     private readonly CnnValidator _validator;
     private readonly TrainingConfig _config;
 
-    public CnnTrainer(CnnNetwork<Architecture> network, CnnValidator validator, TrainingConfig config)
+    public CnnTrainer(CnnNetwork network, CnnValidator validator, TrainingConfig config)
     {
         _network = network;
         _validator = validator;

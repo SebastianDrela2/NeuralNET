@@ -78,7 +78,7 @@ internal class Program
         );
 
         // 3. Network Initialization
-        using var network = new CnnBuilder<Architecture>()
+        var network = new CnnBuilder()
             .WithCnnConfig(config.CnnArchitecture)
             .WithDenseConfig(config.DenseConfig)
             .WithInputSize(loader.ImageScale, loader.ImageScale, 3)
