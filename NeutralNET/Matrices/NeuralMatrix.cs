@@ -20,12 +20,13 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
 {
     ~NeuralMatrix()
     {
-        Console.WriteLine(Location);
+        Console.WriteLine(Locations[^1]);
         NativeMemory.AlignedFree(Pointer);
     }
 
     public const int Alignment = 16;
     private const int ByteAlignment = Alignment * sizeof(float);
+    public static readonly ConcurrentBag<NeuralMatrix> Instances = [];
 
     private static readonly ConcurrentBag<NeuralMatrix> _pool = [];
     private static readonly int CommonAllocatedLength = 134217728;
@@ -39,8 +40,8 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
     public int LogicalLength;
     public uint[] StrideMasks;
     public int UnsafeSize;
+    public List<SourceLocation> Locations = [];
 
-    private SourceLocation Location;
     private bool _inUse = true;
     private bool _isPoolable = true;
 
@@ -79,7 +80,7 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
         LogicalLength = Rows * UsedColumns;
         _allocatedLength = CommonAllocatedLength;
         UnsafeSize = Rows * ColumnsStride;
-        Location = SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize),ln, fp);
+        Locations.Add(SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize),ln, fp));
         if (UnsafeSize > CommonAllocatedLength)
         {
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
@@ -87,6 +88,7 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
 
         Pointer = (float*)NativeMemory.AlignedAlloc((nuint)_allocatedLength * sizeof(float), (nuint)ByteAlignment);
         StrideMasks = MatrixUtils.GetStrideMask(columns);
+        Instances.Add(this);
         Clear();
     }
 
@@ -104,7 +106,7 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
         }
 
-        Location = SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize), ln, fp);
+        Locations.Add(SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize), ln, fp));
         _inUse = true;
         StrideMasks = MatrixUtils.GetStrideMask(columns);
         Clear();

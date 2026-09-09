@@ -16,9 +16,9 @@ public class SourceLocation(
     public int ThreadID = Environment.CurrentManagedThreadId;
     public long TimeStamp = Stopwatch.GetTimestamp();
 
-    public MatrixInfo Info = info;
-    private int LineNumber { get; } = ln;
-    private string FilePath { get; } = fp[53..];
+    public MatrixInfo Info { get; } = info;
+    public int LineNumber { get; } = ln;
+    public string FilePath { get; } = fp[53..];
 
     public string Debug => $"[{TimeStamp}|{ThreadID}] {FilePath}:{LineNumber}\n{Trace}";
     public override string ToString() => Debug;

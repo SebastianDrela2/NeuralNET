@@ -19,8 +19,8 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
         NativeMemory.AlignedFree(Pointer);
     }
 
-    private List<SourceLocation> Locations = [];
-    private List<SourceLocation> DisposeLocations = [];
+    public List<SourceLocation> Locations = [];
+    public List<SourceLocation> DisposeLocations = [];
 
     private string DebugLocations => string.Join('\n', Locations
         .Select(x => ("locations", x))
@@ -33,6 +33,7 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
     private static readonly ConcurrentBag<CnnMatrix> _pool = [];
     private static readonly int CommonAllocatedLength = 35684352;
 
+    public static readonly ConcurrentBag<CnnMatrix> Instances = [];
     public float* Pointer;
     public int Batch;
     public int Channels;
@@ -90,6 +91,7 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
         Pointer = (float*)NativeMemory.AlignedAlloc((nuint)(CommonAllocatedLength * sizeof(float)), (nuint)ByteAlignment);
         _inUse = true;
         Clear();
+        Instances.Add(this);
     }
 
     private void Resize(int batch, int channels, int height, int width, [CallerLineNumber] int ln = 0, [CallerFilePath] string fp = "")
