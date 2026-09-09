@@ -21,6 +21,9 @@ namespace NeutralNET.Framework.Neural.CNN;
 /// and low-latency P/Invoke CUDA/cuBLAS GPU matrix acceleration.
 /// </summary>
 ///
+
+internal record struct CnnInput(int Height, int Width, int Channels);
+
 public sealed unsafe class CnnNeuralFramework
 {
     private const int Avx256Size = 8;
@@ -32,9 +35,7 @@ public sealed unsafe class CnnNeuralFramework
     private readonly NeuralNetworkConfig _baseConfig;
     private readonly CnnArchitectureConfig _cnnConfig;
     private readonly ActivationSelector _activationSelector = new();
-    private readonly int _inputHeight;
-    private readonly int _inputWidth;
-    private readonly int _inputChannels;
+    private readonly CnnInput _input;
 
     private readonly List<ActivationType> _convActivationTypes;
     private readonly List<ActivationFunction> _denseActivations;
@@ -64,9 +65,7 @@ public sealed unsafe class CnnNeuralFramework
         _baseConfig = baseConfig;
         _cnnConfig = cnnConfig;
         _rng = new Random();
-        _inputHeight = inputHeight;
-        _inputWidth = inputWidth;
-        _inputChannels = inputChannels;
+        _input = new CnnInput(inputHeight, inputWidth, inputChannels);
 
         int convCount = cnnConfig.ConvLayers.Count;
         _convHyperParameters = [with(convCount)];
@@ -97,7 +96,7 @@ public sealed unsafe class CnnNeuralFramework
 
     private void SetupCnnWeightsBiases(CnnArchitectureConfig cnnConfig)
     {
-        int inChannels = _inputChannels;
+        int inChannels = _input.Channels;
 
         foreach (var layer in cnnConfig.ConvLayers)
         {
@@ -390,9 +389,9 @@ public sealed unsafe class CnnNeuralFramework
 
     private int ComputeFlattenedSize(CnnArchitectureConfig config)
     {
-        var h = _inputHeight;
-        var w = _inputWidth;
-        var channels = _inputChannels;
+        var h = _input.Height;
+        var w = _input.Width;
+        var channels = _input.Channels;
 
         foreach (var layer in config.ConvLayers)
         {
