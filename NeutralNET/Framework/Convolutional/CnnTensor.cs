@@ -80,7 +80,7 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
         Width = width;
         ReadOnly = readOnly;
         UnsafeSize = batch * channels * height * width;
-        Locations.Add(SourceLocation.Current(ln, fp));
+        Locations.Add(SourceLocation.Current(new MatrixInfo([batch, channels, height, width], UnsafeSize), ln, fp));
 
         if (UnsafeSize > CommonAllocatedLength)
         {
@@ -112,7 +112,7 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
             throw new InvalidOperationException($"Tensor size {newSize} exceeds pool buffer size {CommonAllocatedLength}.");
         }
 
-        Locations.Add(SourceLocation.Current(ln, fp));
+        Locations.Add(SourceLocation.Current(new MatrixInfo([batch, channels, height, width], newSize), ln, fp));
         Batch = batch;
         Channels = channels;
         Height = height;
@@ -391,7 +391,7 @@ public unsafe class CnnMatrix : CriticalFinalizerObject, IDisposable
             _isDisposing = true;
             EnsureNotDisposed();
 
-            DisposeLocations.Add(SourceLocation.Current(ln, fp));
+            DisposeLocations.Add(SourceLocation.Current(new MatrixInfo([Batch, Channels, Height, Width], UnsafeSize), ln, fp));
             _inUse = false;
 
             if (_isPoolable)

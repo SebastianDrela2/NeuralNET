@@ -79,7 +79,7 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
         LogicalLength = Rows * UsedColumns;
         _allocatedLength = CommonAllocatedLength;
         UnsafeSize = Rows * ColumnsStride;
-        Location = SourceLocation.Current(ln, fp);
+        Location = SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize),ln, fp);
         if (UnsafeSize > CommonAllocatedLength)
         {
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
@@ -104,7 +104,7 @@ public unsafe class NeuralMatrix : CriticalFinalizerObject, IDisposable
             throw new InvalidOperationException($"Requested size {UnsafeSize} exceeds CommonAllocatedLength buffer.");
         }
 
-        Location = SourceLocation.Current(ln, fp);
+        Location = SourceLocation.Current(new MatrixInfo([rows, columns], UnsafeSize), ln, fp);
         _inUse = true;
         StrideMasks = MatrixUtils.GetStrideMask(columns);
         Clear();
